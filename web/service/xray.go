@@ -188,7 +188,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 					realitySettings["show"] = false
 					// 2. Ensure maxTimediff is set to reject stale/replayed handshakes
 					if maxTimediff, ok := realitySettings["maxTimediff"].(float64); !ok || maxTimediff == 0 {
-						realitySettings["maxTimediff"] = float64(5000) // 5 seconds max time difference
+						realitySettings["maxTimediff"] = float64(30000) // 30 seconds max time difference
 					}
 				}
 			}

@@ -8,26 +8,7 @@
   },
   "dns": {
     "servers": [
-      {
-        "address": "https://dns.google/dns-query",
-        "domains": [
-          "geosite:geolocation-!cn"
-        ],
-        "expectIPs": []
-      },
-      {
-        "address": "https://cloudflare-dns.com/dns-query",
-        "domains": [
-          "geosite:geolocation-!cn"
-        ],
-        "expectIPs": []
-      },
-      {
-        "address": "localhost",
-        "domains": [
-          "geosite:category-ru"
-        ]
-      }
+      "localhost"
     ],
     "queryStrategy": "UseIP",
     "tag": "dns-in"
@@ -57,14 +38,7 @@
       "protocol": "freedom",
       "settings": {
         "domainStrategy": "AsIs",
-        "redirect": "",
-        "noises": [
-          {
-            "type": "rand",
-            "packet": "50-150",
-            "delay": "50-150"
-          }
-        ]
+        "redirect": ""
       }
     },
     {
@@ -105,7 +79,7 @@
     }
   },
   "routing": {
-    "domainStrategy": "IPIfNonMatch",
+    "domainStrategy": "AsIs",
     "rules": [
       {
         "type": "field",

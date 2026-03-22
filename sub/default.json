@@ -2,7 +2,7 @@
   "remarks": "",
   "dns": {
     "tag": "dns_out",
-    "queryStrategy": "UseIP",
+    "queryStrategy": "UseIPv4",
     "servers": [
       {
         "address": "https://1.1.1.1/dns-query",
@@ -75,14 +75,7 @@
       "protocol": "freedom",
       "settings": {
         "domainStrategy": "AsIs",
-        "redirect": "",
-        "noises": [
-          {
-            "type": "rand",
-            "packet": "50-100",
-            "delay": "30-80"
-          }
-        ]
+        "redirect": ""
       }
     },
     {
@@ -101,7 +94,8 @@
         "connIdle": 300,
         "downlinkOnly": 5,
         "handshake": 4,
-        "uplinkOnly": 1
+        "uplinkOnly": 1,
+        "bufferSize": 0
       }
     },
     "system": {
@@ -110,28 +104,14 @@
     }
   },
   "routing": {
-    "domainStrategy": "IPIfNonMatch",
+    "domainStrategy": "AsIs",
     "rules": [
       {
         "type": "field",
         "outboundTag": "direct",
         "domain": [
           "geosite:category-ru",
-          "domain:gosuslugi.ru",
-          "domain:esia.gosuslugi.ru",
-          "domain:lk.gosuslugi.ru",
-          "domain:mos.ru",
-          "domain:nalog.gov.ru",
-          "domain:lkfl2.nalog.ru",
           "domain:cbr.ru",
-          "domain:sberbank.ru",
-          "domain:online.sberbank.ru",
-          "domain:tinkoff.ru",
-          "domain:api.tinkoff.ru",
-          "domain:vtb.ru",
-          "domain:online.vtb.ru",
-          "domain:alfabank.ru",
-          "domain:click.alfabank.ru",
           "domain:raiffeisen.ru",
           "domain:gazprombank.ru",
           "domain:open.ru",
@@ -139,13 +119,7 @@
           "domain:sovcombank.ru",
           "domain:psbank.ru",
           "domain:rosbank.ru",
-          "domain:mts.ru",
-          "domain:megafon.ru",
-          "domain:beeline.ru",
-          "domain:tele2.ru",
           "domain:yota.ru",
-          "domain:rt.ru",
-          "domain:rostelecom.ru",
           "domain:dom.ru",
           "domain:ertelecom.ru",
           "domain:1c.ru",
@@ -158,28 +132,14 @@
           "domain:rosreestr.gov.ru",
           "domain:mvd.ru",
           "domain:fns.ru",
-          "domain:cdek.ru",
-          "domain:pochta.ru",
           "domain:russianpost.ru",
           "domain:maxestate.ru",
           "domain:max.ru",
           "domain:okko.tv",
-          "domain:ivi.ru",
-          "domain:kinopoisk.ru",
           "domain:wink.ru",
           "domain:premier.one",
           "domain:more.tv",
           "domain:start.ru",
-          "domain:wildberries.ru",
-          "domain:ozon.ru",
-          "domain:avito.ru",
-          "domain:market.yandex.ru",
-          "domain:yandex.ru",
-          "domain:ya.ru",
-          "domain:mail.ru",
-          "domain:vk.com",
-          "domain:ok.ru",
-          "domain:2gis.ru",
           "domain:rkn.gov.ru"
         ]
       },
