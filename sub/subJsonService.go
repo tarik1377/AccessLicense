@@ -222,8 +222,13 @@ func (s *SubJsonService) streamData(stream string) map[string]any {
 	}
 	delete(streamSettings, "sockopt")
 
-	// Always route through fragment outbound for DPI bypass (fragment is always in defaultOutbounds via default.json)
-	streamSettings["sockopt"] = json_util.RawMessage(`{"dialerProxy": "fragment", "tcpKeepAliveIdle": 100}`)
+	// Route through fragment outbound for DPI bypass, but NOT for Reality —
+	// fragmenting the ClientHello is an anomaly for Reality (real browsers send it in one packet).
+	if security == "reality" {
+		streamSettings["sockopt"] = json_util.RawMessage(`{"tcpKeepAliveIdle": 45}`)
+	} else {
+		streamSettings["sockopt"] = json_util.RawMessage(`{"dialerProxy": "fragment", "tcpKeepAliveIdle": 45}`)
+	}
 
 	// remove proxy protocol
 	network, _ := streamSettings["network"].(string)

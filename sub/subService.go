@@ -975,7 +975,7 @@ func (s *SubService) genRemark(inbound *model.Inbound, email string, extra strin
 // Otherwise, the original fp value is returned as-is.
 func getFingerprint(fp string) string {
 	if fp == "" || fp == "random" {
-		fingerprints := []string{"chrome", "firefox", "safari", "edge", "ios", "android"}
+		fingerprints := []string{"chrome", "firefox", "safari", "edge"}
 		return fingerprints[random.Num(len(fingerprints))]
 	}
 	return fp

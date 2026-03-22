@@ -212,7 +212,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 			}
 			// Set keep-alive to match typical browser behavior
 			if _, ok := sockopt["tcpKeepAliveIdle"]; !ok {
-				sockopt["tcpKeepAliveIdle"] = 100
+				sockopt["tcpKeepAliveIdle"] = 45
 			}
 			stream["sockopt"] = sockopt
 
