@@ -462,7 +462,8 @@ func (s *SubService) genVlessLink(inbound *model.Inbound, email string) string {
 					params["pqv"] = pqv
 				}
 			}
-			params["spx"] = generateRealisticSpiderX()
+			realityDest, _ := realitySetting["dest"].(string)
+			params["spx"] = generateSpiderXForDest(realityDest)
 		}
 
 		if streamNetwork == "tcp" && len(clients[clientIndex].Flow) > 0 {
@@ -655,7 +656,8 @@ func (s *SubService) genTrojanLink(inbound *model.Inbound, email string) string 
 					params["pqv"] = pqv
 				}
 			}
-			params["spx"] = generateRealisticSpiderX()
+			realityDest, _ := realitySetting["dest"].(string)
+			params["spx"] = generateSpiderXForDest(realityDest)
 		}
 
 		if streamNetwork == "tcp" && len(clients[clientIndex].Flow) > 0 {
@@ -1063,6 +1065,52 @@ func generateRealisticSpiderX() string {
 		"/privacy/privacystatement?t=" + timestamp,
 	}
 	return paths[random.Num(len(paths))]
+}
+
+// generateSpiderXForDest creates domain-specific browser-like URL paths for Reality SpiderX
+func generateSpiderXForDest(dest string) string {
+	// Strip port if present (e.g. "www.microsoft.com:443" -> "www.microsoft.com")
+	host := dest
+	if h, _, err := net.SplitHostPort(dest); err == nil {
+		host = h
+	}
+
+	timestamp := fmt.Sprintf("%d", time.Now().Unix())
+	sessionId := random.Seq(12)
+
+	switch {
+	case strings.HasSuffix(host, "microsoft.com"):
+		paths := []string{
+			"/en-us/windows/get-started/",
+			"/en-us/microsoft-365/",
+			"/msdownload/update/v3/static/trustedr/en/authrootstl.cab?t=" + timestamp,
+			"/v1.0/me/drive/root/children?$top=20&sid=" + sessionId,
+			"/identity/v1.0/.well-known/openid-configuration",
+		}
+		return paths[random.Num(len(paths))]
+
+	case strings.HasSuffix(host, "apple.com"):
+		paths := []string{
+			"/retail/availability?product=MK2N3",
+			"/v1/config",
+			"/services/i/identify",
+			"/shop/go/product/iphone_15",
+			"/today/",
+		}
+		return paths[random.Num(len(paths))]
+
+	case strings.HasSuffix(host, "google.com"):
+		paths := []string{
+			"/dl/android/aosp/taimen-factory.zip",
+			"/chrome/answer/95346",
+			"/search?q=weather",
+			"/maps/api/js?v=3",
+		}
+		return paths[random.Num(len(paths))]
+
+	default:
+		return generateRealisticSpiderX()
+	}
 }
 
 func searchKey(data any, key string) (any, bool) {

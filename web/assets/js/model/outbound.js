@@ -293,7 +293,7 @@ class xHTTPStreamSettings extends CommonClass {
         noGRPCHeader = false,
         scMinPostsIntervalMs = "30",
         xmux = {
-            maxConcurrency: "16-32",
+            maxConcurrency: "8-16",
             maxConnections: 0,
             cMaxReuseTimes: 0,
             hMaxRequestTimes: "600-900",

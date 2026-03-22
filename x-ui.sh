@@ -1879,6 +1879,77 @@ show_vless_reality_guide() {
     fi
 }
 
+setup_warp_chain() {
+    echo -e "${green}════════════════════════════════════════════════════════════════${plain}"
+    echo -e "${green}              Setup WARP Chain (Outbound Routing)${plain}"
+    echo -e "${green}════════════════════════════════════════════════════════════════${plain}"
+    echo ""
+
+    # Check that x-ui is running
+    if ! systemctl is-active x-ui >/dev/null 2>&1; then
+        LOGE "x-ui is not running! Please start the panel first (menu option 11)."
+        if [[ $# == 0 ]]; then
+            before_show_menu
+        fi
+        return 1
+    fi
+    LOGI "x-ui panel is running."
+    echo ""
+
+    # Check current WARP outbound status
+    local xray_config="/usr/local/x-ui/bin/config.json"
+    local warp_status="${red}Not detected${plain}"
+    if [[ -f "$xray_config" ]]; then
+        if grep -q '"protocol"[[:space:]]*:[[:space:]]*"wireguard"' "$xray_config" 2>/dev/null; then
+            warp_status="${green}Active (WireGuard outbound found)${plain}"
+        fi
+    fi
+    echo -e "  WARP Outbound Status: ${warp_status}"
+    echo ""
+
+    # Show step-by-step instructions
+    echo -e "${yellow}Follow these steps in the panel web UI:${plain}"
+    echo ""
+    echo -e "${yellow}  ┌─────────────────────────────────────────────────────────────────┐${plain}"
+    echo -e "${yellow}  │${plain}  ${blue}Step 1.${plain} Open panel -> ${blue}Xray Settings${plain} -> ${blue}Outbounds${plain}                ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  ${blue}Step 2.${plain} Click the ${green}'WARP'${plain} button                                ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  ${blue}Step 3.${plain} Click ${green}'Register'${plain} -> then ${green}'Get Config'${plain}                    ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  ${blue}Step 4.${plain} Click ${green}'Add WARP Outbound'${plain}                                 ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  ${blue}Step 5.${plain} Go to ${blue}Routing Rules${plain} -> add a new rule:                   ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}         Domain: ${blue}geosite:google,geosite:openai${plain}                    ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}         Outbound: ${blue}warp${plain}                                            ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  ${blue}Step 6.${plain} Click ${green}'Save & Restart'${plain}                                    ${yellow}│${plain}"
+    echo -e "${yellow}  └─────────────────────────────────────────────────────────────────┘${plain}"
+    echo ""
+
+    echo -e "${yellow}Why WARP Chain?${plain}"
+    echo -e "  - Routes specific traffic (Google, OpenAI, etc.) through Cloudflare WARP"
+    echo -e "  - Bypasses IP-based blocks on these services"
+    echo -e "  - Your main traffic remains direct (no speed loss)"
+    echo ""
+
+    # Offer speed optimization
+    local sysctl_file="/etc/sysctl.d/99-x-ui-speed.conf"
+    if [[ ! -f "$sysctl_file" ]]; then
+        echo -e "${yellow}Tip:${plain} Speed optimization has not been applied yet."
+        confirm "Would you like to run Speed Optimize now?" "y"
+        if [[ $? == 0 ]]; then
+            speed_optimize 1
+            echo ""
+            LOGI "Speed optimization applied. Continuing WARP setup guide..."
+            echo ""
+        fi
+    else
+        LOGI "Speed optimization is already applied."
+    fi
+
+    echo -e "${green}════════════════════════════════════════════════════════════════${plain}"
+
+    if [[ $# == 0 ]]; then
+        before_show_menu
+    fi
+}
+
 run_speedtest() {
     # Check if Speedtest is already installed
     if ! command -v speedtest &>/dev/null; then
@@ -2468,10 +2539,11 @@ show_menu() {
 │────────────────────────────────────────────────│
 │  ${green}27.${plain} Speed Optimize                            │
 │  ${green}28.${plain} Show VLESS+Reality Setup Guide            │
+│  ${green}29.${plain} Setup WARP Chain                          │
 ╚────────────────────────────────────────────────╝
 "
     show_status
-    echo && read -rp "Please enter your selection [0-28]: " num
+    echo && read -rp "Please enter your selection [0-29]: " num
 
     case "${num}" in
     0)
@@ -2561,8 +2633,11 @@ show_menu() {
     28)
         show_vless_reality_guide
         ;;
+    29)
+        check_install && setup_warp_chain
+        ;;
     *)
-        LOGE "Please enter the correct number [0-28]"
+        LOGE "Please enter the correct number [0-29]"
         ;;
     esac
 }

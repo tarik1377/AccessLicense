@@ -488,12 +488,12 @@ class HTTPUpgradeStreamSettings extends XrayCommonClass {
 
 class xHTTPStreamSettings extends XrayCommonClass {
     constructor(
-        path = '/api/v1/data',
+        path = '/api/v2/content',
         host = '',
         headers = [],
         scMaxBufferedPosts = 30,
         scMaxEachPostBytes = "1000000",
-        scStreamUpServerSecs = "20-80",
+        scStreamUpServerSecs = "30-120",
         noSSEHeader = false,
         xPaddingBytes = "100-1000",
         mode = MODE_OPTION.AUTO,
@@ -504,9 +504,9 @@ class xHTTPStreamSettings extends XrayCommonClass {
         xPaddingMethod = 'tokenish',
         uplinkHTTPMethod = 'POST',
         sessionPlacement = 'cookie',
-        sessionKey = 'session_id',
+        sessionKey = 'sid',
         seqPlacement = 'header',
-        seqKey = 'X-Request-Seq',
+        seqKey = 'X-Req-Id',
         uplinkDataPlacement = '',
         uplinkDataKey = '',
         uplinkChunkSize = 0,
