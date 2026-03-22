@@ -1630,6 +1630,108 @@ ssl_cert_issue_CF() {
     fi
 }
 
+speed_optimize() {
+    echo -e "${green}━━━━━━━━━━━━━ Speed Optimization ━━━━━━━━━━━━━${plain}"
+
+    # 1. BBR
+    local current_cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
+    if [[ "$current_cc" == "bbr" ]]; then
+        LOGI "BBR already enabled"
+    else
+        LOGI "Enabling BBR..."
+        modprobe tcp_bbr 2>/dev/null
+        echo "tcp_bbr" > /etc/modules-load.d/bbr.conf 2>/dev/null
+    fi
+
+    # 2. Sysctl
+    LOGI "Applying aggressive network tuning..."
+    cat > /etc/sysctl.d/99-x-ui-speed.conf << 'SEOF'
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_slow_start_after_idle = 0
+net.ipv4.tcp_mtu_probing = 1
+net.ipv4.tcp_keepalive_time = 300
+net.ipv4.tcp_keepalive_intvl = 15
+net.ipv4.tcp_keepalive_probes = 5
+net.ipv4.tcp_fin_timeout = 10
+net.ipv4.tcp_max_tw_buckets = 262144
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.tcp_window_scaling = 1
+net.ipv4.tcp_timestamps = 1
+net.ipv4.tcp_sack = 1
+net.ipv4.tcp_ecn = 0
+net.ipv4.tcp_adv_win_scale = -2
+net.ipv4.tcp_notsent_lowat = 131072
+net.core.rmem_max = 67108864
+net.core.wmem_max = 67108864
+net.core.rmem_default = 2097152
+net.core.wmem_default = 2097152
+net.ipv4.tcp_rmem = 4096 131072 67108864
+net.ipv4.tcp_wmem = 4096 65536 67108864
+net.core.optmem_max = 65536
+net.core.netdev_max_backlog = 65536
+net.core.somaxconn = 65536
+net.ipv4.ip_local_port_range = 1024 65535
+net.ipv4.tcp_max_orphans = 65536
+SEOF
+    sysctl -p /etc/sysctl.d/99-x-ui-speed.conf >/dev/null 2>&1
+
+    # 3. Show current state
+    echo ""
+    LOGI "Current settings:"
+    echo -e "  Congestion:  ${green}$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)${plain}"
+    echo -e "  Qdisc:       ${green}$(sysctl -n net.core.default_qdisc 2>/dev/null)${plain}"
+    echo -e "  FastOpen:    ${green}$(sysctl -n net.ipv4.tcp_fastopen 2>/dev/null)${plain}"
+    echo -e "  Rmem max:    ${green}$(( $(sysctl -n net.core.rmem_max 2>/dev/null) / 1048576 )) MB${plain}"
+    echo -e "  Wmem max:    ${green}$(( $(sysctl -n net.core.wmem_max 2>/dev/null) / 1048576 )) MB${plain}"
+    echo -e "  SlowStart:   ${green}$(sysctl -n net.ipv4.tcp_slow_start_after_idle 2>/dev/null) (0=disabled=good)${plain}"
+    echo ""
+    LOGI "Speed optimization applied!"
+
+    if [[ $# == 0 ]]; then
+        before_show_menu
+    fi
+}
+
+show_vless_reality_guide() {
+    echo -e "${green}━━━━━━━ VLESS+Reality Setup Guide ━━━━━━━${plain}"
+    echo ""
+    echo -e "  ${blue}Optimal settings for maximum speed:${plain}"
+    echo ""
+    echo -e "  1. Panel → ${green}Inbounds${plain} → ${green}Add Inbound${plain}"
+    echo -e "  2. Remark: any name"
+    echo -e "  3. Protocol: ${green}VLESS${plain}"
+    echo -e "  4. Port: ${green}443${plain}"
+    echo -e "  5. Transport: ${green}TCP${plain}"
+    echo -e "  6. Security: ${green}Reality${plain}"
+    echo -e "  7. Target (dest): ${green}www.microsoft.com:443${plain}"
+    echo -e "  8. SNI (serverNames): ${green}www.microsoft.com${plain}"
+    echo -e "  9. Fingerprint (uTLS): ${green}chrome${plain}"
+    echo -e " 10. Client → Flow: ${green}xtls-rprx-vision${plain}"
+    echo -e " 11. Generate keys: ${green}x-ui x25519${plain}"
+    echo ""
+    echo -e "  ${yellow}Why microsoft.com:${plain}"
+    echo -e "    - CDN closer to most servers = lower latency"
+    echo -e "    - TLS 1.3 + H2 by default"
+    echo -e "    - Rarely blocked by DPI"
+    echo ""
+    echo -e "  ${yellow}Alternative dest targets:${plain}"
+    echo -e "    - ${green}www.apple.com:443${plain}"
+    echo -e "    - ${green}www.amazon.com:443${plain}"
+    echo -e "    - ${green}dl.google.com:443${plain}"
+    echo ""
+    echo -e "  ${yellow}Client apps:${plain}"
+    echo -e "    - iOS/Mac: ${green}Streisand, V2Box${plain}"
+    echo -e "    - Android: ${green}V2rayNG, NekoBox${plain}"
+    echo -e "    - Windows: ${green}V2rayN, NekoRay${plain}"
+    echo ""
+
+    if [[ $# == 0 ]]; then
+        before_show_menu
+    fi
+}
+
 run_speedtest() {
     # Check if Speedtest is already installed
     if ! command -v speedtest &>/dev/null; then
@@ -2216,10 +2318,13 @@ show_menu() {
 │  ${green}24.${plain} Enable BBR                                │
 │  ${green}25.${plain} Update Geo Files                          │
 │  ${green}26.${plain} Speedtest by Ookla                        │
+│────────────────────────────────────────────────│
+│  ${green}27.${plain} Speed Optimize                            │
+│  ${green}28.${plain} Show VLESS+Reality Setup Guide            │
 ╚────────────────────────────────────────────────╝
 "
     show_status
-    echo && read -rp "Please enter your selection [0-26]: " num
+    echo && read -rp "Please enter your selection [0-28]: " num
 
     case "${num}" in
     0)
@@ -2303,8 +2408,14 @@ show_menu() {
     26)
         run_speedtest
         ;;
+    27)
+        speed_optimize
+        ;;
+    28)
+        show_vless_reality_guide
+        ;;
     *)
-        LOGE "Please enter the correct number [0-26]"
+        LOGE "Please enter the correct number [0-28]"
         ;;
     esac
 }

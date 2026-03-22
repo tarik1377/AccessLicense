@@ -744,9 +744,167 @@ config_after_update() {
     fi
 }
 
+# Backup x-ui database before update
+backup_database() {
+    local db_path="/etc/x-ui/x-ui.db"
+    if [[ -f "$db_path" ]]; then
+        local backup_path="${db_path}.bak.$(date +%s)"
+        echo -e "${green}Backing up database: ${db_path} -> ${backup_path}${plain}"
+        cp "$db_path" "$backup_path"
+        if [[ $? -eq 0 ]]; then
+            echo -e "${green}Database backup created successfully${plain}"
+        else
+            echo -e "${red}Failed to create database backup!${plain}"
+            read -rp "Continue update without backup? (y/n): " cont
+            if [[ "$cont" != "y" && "$cont" != "Y" ]]; then
+                _fail "Update aborted by user (no database backup)."
+            fi
+        fi
+    else
+        echo -e "${yellow}Database file ${db_path} not found, skipping backup${plain}"
+    fi
+}
+
+# Check and apply sysctl optimizations (BBR, network buffers)
+check_and_apply_sysctl() {
+    echo -e "${green}Checking sysctl network optimizations...${plain}"
+
+    local sysctl_changed=false
+    local sysctl_conf="/etc/sysctl.conf"
+
+    # --- BBR congestion control ---
+    local current_cc
+    current_cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
+    local current_qdisc
+    current_qdisc=$(sysctl -n net.core.default_qdisc 2>/dev/null)
+
+    if [[ "$current_cc" != "bbr" ]]; then
+        # Check kernel support for BBR
+        if modprobe tcp_bbr 2>/dev/null || grep -q bbr /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null; then
+            echo -e "${yellow}BBR is not active (current: ${current_cc}). Enabling BBR...${plain}"
+            sysctl -w net.core.default_qdisc=fq >/dev/null 2>&1
+            sysctl -w net.ipv4.tcp_congestion_control=bbr >/dev/null 2>&1
+            grep -q "^net.core.default_qdisc" "$sysctl_conf" 2>/dev/null && \
+                sed -i 's/^net.core.default_qdisc.*/net.core.default_qdisc=fq/' "$sysctl_conf" || \
+                echo "net.core.default_qdisc=fq" >> "$sysctl_conf"
+            grep -q "^net.ipv4.tcp_congestion_control" "$sysctl_conf" 2>/dev/null && \
+                sed -i 's/^net.ipv4.tcp_congestion_control.*/net.ipv4.tcp_congestion_control=bbr/' "$sysctl_conf" || \
+                echo "net.ipv4.tcp_congestion_control=bbr" >> "$sysctl_conf"
+            sysctl_changed=true
+            echo -e "${green}BBR enabled successfully${plain}"
+        else
+            echo -e "${yellow}BBR is not supported by the current kernel, skipping${plain}"
+        fi
+    else
+        echo -e "${green}BBR is already active${plain}"
+    fi
+
+    # --- Network buffer optimizations ---
+    declare -A sysctl_opts
+    sysctl_opts=(
+        ["net.core.rmem_max"]="16777216"
+        ["net.core.wmem_max"]="16777216"
+        ["net.ipv4.tcp_rmem"]="4096 87380 16777216"
+        ["net.ipv4.tcp_wmem"]="4096 65536 16777216"
+        ["net.ipv4.tcp_fastopen"]="3"
+        ["net.ipv4.tcp_slow_start_after_idle"]="0"
+    )
+
+    for key in "${!sysctl_opts[@]}"; do
+        local desired="${sysctl_opts[$key]}"
+        local current
+        current=$(sysctl -n "$key" 2>/dev/null | tr '\t' ' ')
+        if [[ "$current" != "$desired" ]]; then
+            echo -e "${yellow}Applying ${key} = ${desired} (was: ${current})${plain}"
+            sysctl -w "${key}=${desired}" >/dev/null 2>&1
+            # Persist in sysctl.conf
+            grep -q "^${key}" "$sysctl_conf" 2>/dev/null && \
+                sed -i "s|^${key}.*|${key}=${desired}|" "$sysctl_conf" || \
+                echo "${key}=${desired}" >> "$sysctl_conf"
+            sysctl_changed=true
+        fi
+    done
+
+    if [[ "$sysctl_changed" == "true" ]]; then
+        sysctl -p >/dev/null 2>&1
+        echo -e "${green}Sysctl optimizations applied and persisted${plain}"
+    else
+        echo -e "${green}All sysctl optimizations are already in place${plain}"
+    fi
+}
+
+# Check Xray version and offer to update geo-data files
+check_xray_and_geodata() {
+    echo -e "${green}Checking Xray version and geo-data...${plain}"
+
+    local xray_bin="${xui_folder}/bin/xray-linux-$(arch)"
+    # Handle ARM variants
+    if [[ $(arch) == "armv5" || $(arch) == "armv6" || $(arch) == "armv7" ]]; then
+        xray_bin="${xui_folder}/bin/xray-linux-arm"
+    fi
+
+    if [[ -x "$xray_bin" ]]; then
+        local xray_version
+        xray_version=$("$xray_bin" version 2>/dev/null | head -n1)
+        echo -e "${green}Xray version: ${xray_version}${plain}"
+    else
+        echo -e "${yellow}Xray binary not found or not executable at ${xray_bin}${plain}"
+    fi
+
+    # Check geo-data freshness
+    local geo_dir="${xui_folder}/bin"
+    local geoip_file="${geo_dir}/geoip.dat"
+    local geosite_file="${geo_dir}/geosite.dat"
+    local update_geo=false
+
+    if [[ ! -f "$geoip_file" || ! -f "$geosite_file" ]]; then
+        echo -e "${yellow}Geo-data files are missing${plain}"
+        update_geo=true
+    else
+        # Check if geo files are older than 30 days
+        local now
+        now=$(date +%s)
+        local geoip_mtime
+        geoip_mtime=$(stat -c %Y "$geoip_file" 2>/dev/null || echo 0)
+        local age_days=$(( (now - geoip_mtime) / 86400 ))
+        if [[ $age_days -gt 30 ]]; then
+            echo -e "${yellow}Geo-data files are ${age_days} days old (>30 days)${plain}"
+            update_geo=true
+        else
+            echo -e "${green}Geo-data files are up to date (${age_days} days old)${plain}"
+        fi
+    fi
+
+    if [[ "$update_geo" == "true" ]]; then
+        echo -e "${green}Updating geo-data files...${plain}"
+
+        local geoip_url="https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat"
+        local geosite_url="https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
+
+        ${curl_bin} -fLRo "${geoip_file}" "$geoip_url" 2>/dev/null
+        if [[ $? -ne 0 ]]; then
+            ${curl_bin} -4fLRo "${geoip_file}" "$geoip_url" 2>/dev/null
+        fi
+
+        ${curl_bin} -fLRo "${geosite_file}" "$geosite_url" 2>/dev/null
+        if [[ $? -ne 0 ]]; then
+            ${curl_bin} -4fLRo "${geosite_file}" "$geosite_url" 2>/dev/null
+        fi
+
+        if [[ -f "$geoip_file" && -f "$geosite_file" ]]; then
+            echo -e "${green}Geo-data files updated successfully${plain}"
+        else
+            echo -e "${red}Failed to download one or more geo-data files${plain}"
+        fi
+    fi
+}
+
 update_x-ui() {
     cd ${xui_folder%/x-ui}/
-    
+
+    # Backup database before any changes
+    backup_database
+
     if [ -f "${xui_folder}/x-ui" ]; then
         current_xui_version=$(${xui_folder}/x-ui -v)
         echo -e "${green}Current x-ui version: ${current_xui_version}${plain}"
@@ -933,8 +1091,12 @@ update_x-ui() {
         systemctl start x-ui >/dev/null 2>&1
     fi
     
+    # Post-update: apply sysctl optimizations and check geo-data
+    check_and_apply_sysctl
+    check_xray_and_geodata
+
     config_after_update
-    
+
     echo -e "${green}x-ui ${tag_version}${plain} updating finished, it is running now..."
     echo -e ""
     echo -e "┌───────────────────────────────────────────────────────┐

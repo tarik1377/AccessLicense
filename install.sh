@@ -109,6 +109,159 @@ gen_random_string() {
     echo "$random_string"
 }
 
+load_bbr_module() {
+    echo -e "${green}Checking tcp_bbr kernel module...${plain}"
+    if lsmod | grep -q tcp_bbr; then
+        echo -e "${green}tcp_bbr module is already loaded${plain}"
+    else
+        echo -e "${yellow}Loading tcp_bbr module...${plain}"
+        modprobe tcp_bbr 2>/dev/null
+        if lsmod | grep -q tcp_bbr; then
+            echo -e "${green}tcp_bbr module loaded successfully${plain}"
+        else
+            echo -e "${red}Failed to load tcp_bbr module. Your kernel may not support it.${plain}"
+            return 1
+        fi
+    fi
+    # Ensure tcp_bbr loads on boot
+    if [ -f /etc/modules-load.d/bbr.conf ]; then
+        if grep -q tcp_bbr /etc/modules-load.d/bbr.conf; then
+            echo -e "${green}tcp_bbr already in modules-load.d${plain}"
+        else
+            echo "tcp_bbr" >> /etc/modules-load.d/bbr.conf
+        fi
+    else
+        echo "tcp_bbr" > /etc/modules-load.d/bbr.conf
+    fi
+    return 0
+}
+
+optimize_sysctl() {
+    echo -e "${green}Applying sysctl optimizations (BBR, buffers, TCP tuning)...${plain}"
+
+    # Load BBR module first
+    load_bbr_module
+
+    local sysctl_conf="/etc/sysctl.d/99-x-ui-optimizations.conf"
+
+    cat > "${sysctl_conf}" << 'SYSCTL_EOF'
+# x-ui VPN performance optimizations
+
+# Enable BBR congestion control
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+
+# TCP buffers 64MB (min, default, max)
+net.core.rmem_max = 67108864
+net.core.wmem_max = 67108864
+net.ipv4.tcp_rmem = 4096 87380 67108864
+net.ipv4.tcp_wmem = 4096 65536 67108864
+
+# Enable TCP Fast Open (client + server)
+net.ipv4.tcp_fastopen = 3
+
+# Do not reset cwnd after idle
+net.ipv4.tcp_slow_start_after_idle = 0
+
+# Additional performance tweaks
+net.core.netdev_max_backlog = 16384
+net.ipv4.tcp_max_syn_backlog = 8192
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.tcp_fin_timeout = 15
+net.ipv4.tcp_keepalive_time = 300
+net.ipv4.tcp_keepalive_intvl = 30
+net.ipv4.tcp_keepalive_probes = 5
+net.ipv4.tcp_mtu_probing = 1
+SYSCTL_EOF
+
+    sysctl -p "${sysctl_conf}" >/dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        echo -e "${green}Sysctl optimizations applied successfully${plain}"
+        echo -e "${green}  - BBR congestion control: enabled${plain}"
+        echo -e "${green}  - TCP buffers: 64MB${plain}"
+        echo -e "${green}  - TCP Fast Open: enabled (client+server)${plain}"
+        echo -e "${green}  - tcp_slow_start_after_idle: disabled${plain}"
+    else
+        echo -e "${yellow}Some sysctl parameters could not be applied (check kernel support)${plain}"
+        # Try applying what we can
+        sysctl -p "${sysctl_conf}" 2>/dev/null || true
+    fi
+}
+
+install_fail2ban() {
+    echo -e "${green}Installing and configuring fail2ban for x-ui...${plain}"
+
+    # Install fail2ban
+    case "${release}" in
+        ubuntu | debian | armbian)
+            apt-get install -y -q fail2ban >/dev/null 2>&1
+        ;;
+        fedora | amzn | virtuozzo | rhel | almalinux | rocky | ol)
+            dnf install -y -q fail2ban >/dev/null 2>&1
+        ;;
+        centos)
+            if [[ "${VERSION_ID}" =~ ^7 ]]; then
+                yum install -y fail2ban >/dev/null 2>&1
+            else
+                dnf install -y -q fail2ban >/dev/null 2>&1
+            fi
+        ;;
+        arch | manjaro | parch)
+            pacman -S --noconfirm fail2ban >/dev/null 2>&1
+        ;;
+        opensuse-tumbleweed | opensuse-leap)
+            zypper -q install -y fail2ban >/dev/null 2>&1
+        ;;
+        alpine)
+            apk add fail2ban >/dev/null 2>&1
+        ;;
+        *)
+            apt-get install -y -q fail2ban >/dev/null 2>&1
+        ;;
+    esac
+
+    if ! command -v fail2ban-client >/dev/null 2>&1; then
+        echo -e "${yellow}fail2ban installation failed, skipping configuration${plain}"
+        return 1
+    fi
+
+    echo -e "${green}fail2ban installed, configuring x-ui-iplimit filter...${plain}"
+
+    # Create x-ui-iplimit filter
+    mkdir -p /etc/fail2ban/filter.d
+    cat > /etc/fail2ban/filter.d/x-ui-iplimit.conf << 'F2B_FILTER_EOF'
+[Definition]
+datepattern = ^%%Y/%%m/%%d %%H:%%M:%%S
+failregex   = \[LIMIT_IP\]\s+Email\s+=\s+\S+\s+\|\|\s+SRC\s+=\s+<ADDR>
+ignoreregex =
+F2B_FILTER_EOF
+
+    # Create jail configuration for x-ui
+    cat > /etc/fail2ban/jail.d/x-ui.conf << 'F2B_JAIL_EOF'
+[x-ui-iplimit]
+enabled  = true
+filter   = x-ui-iplimit
+action   = iptables-allports[name=x-ui-iplimit, protocol=all]
+logpath  = /var/log/x-ui/access.log
+maxretry = 5
+findtime = 60
+bantime  = 600
+F2B_JAIL_EOF
+
+    # Enable and start fail2ban
+    if [[ $release == "alpine" ]]; then
+        rc-update add fail2ban default 2>/dev/null
+        rc-service fail2ban restart 2>/dev/null
+    else
+        systemctl enable fail2ban >/dev/null 2>&1
+        systemctl restart fail2ban >/dev/null 2>&1
+    fi
+
+    echo -e "${green}fail2ban configured with x-ui-iplimit filter${plain}"
+    echo -e "${green}  - maxretry: 5, findtime: 60s, bantime: 600s${plain}"
+    echo -e "${green}  - Log path: /var/log/x-ui/access.log${plain}"
+}
+
 install_acme() {
     echo -e "${green}Installing acme.sh for SSL certificate management...${plain}"
     cd ~ || return 1
@@ -957,8 +1110,26 @@ install_x-ui() {
 │  ${blue}x-ui install${plain}      - Install                          │
 │  ${blue}x-ui uninstall${plain}    - Uninstall                        │
 └───────────────────────────────────────────────────────┘"
+
+    echo ""
+    echo -e "${green}═══════════════════════════════════════════════════════${plain}"
+    echo -e "${green}  Recommended VLESS+Reality Inbound Settings:         ${plain}"
+    echo -e "${green}═══════════════════════════════════════════════════════${plain}"
+    echo -e "${blue}  Protocol:${plain}    VLESS"
+    echo -e "${blue}  Port:${plain}        443"
+    echo -e "${blue}  Network:${plain}     TCP"
+    echo -e "${blue}  Security:${plain}    Reality"
+    echo -e "${blue}  Dest:${plain}        www.microsoft.com:443"
+    echo -e "${blue}  SNI:${plain}         www.microsoft.com"
+    echo -e "${blue}  Fingerprint:${plain} chrome"
+    echo -e "${blue}  Flow:${plain}        xtls-rprx-vision"
+    echo -e "${green}═══════════════════════════════════════════════════════${plain}"
+    echo -e "${yellow}  Generate ShortId and Private/Public keys in panel   ${plain}"
+    echo -e "${green}═══════════════════════════════════════════════════════${plain}"
 }
 
 echo -e "${green}Running...${plain}"
 install_base
+optimize_sysctl
+install_fail2ban
 install_x-ui $1
