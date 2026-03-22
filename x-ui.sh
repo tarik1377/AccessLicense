@@ -1631,63 +1631,149 @@ ssl_cert_issue_CF() {
 }
 
 speed_optimize() {
-    echo -e "${green}━━━━━━━━━━━━━ Speed Optimization ━━━━━━━━━━━━━${plain}"
+    echo -e "${green}────────────────────────────────────────${plain}"
+    echo -e "${green}       Speed Optimize${plain}"
+    echo -e "${green}────────────────────────────────────────${plain}"
+    echo ""
 
-    # 1. BBR
-    local current_cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
-    if [[ "$current_cc" == "bbr" ]]; then
-        LOGI "BBR already enabled"
+    # --- Step 1: Enable BBR if not already enabled ---
+    local cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
+    local qdisc=$(sysctl -n net.core.default_qdisc 2>/dev/null)
+
+    if [[ "$cc" == "bbr" ]] && [[ "$qdisc" =~ ^(fq|cake)$ ]]; then
+        LOGI "BBR is already enabled (congestion: ${cc}, qdisc: ${qdisc})"
     else
         LOGI "Enabling BBR..."
         modprobe tcp_bbr 2>/dev/null
         echo "tcp_bbr" > /etc/modules-load.d/bbr.conf 2>/dev/null
+        if [ -d "/etc/sysctl.d/" ]; then
+            {
+                echo "#$(sysctl -n net.core.default_qdisc):$(sysctl -n net.ipv4.tcp_congestion_control)"
+                echo "net.core.default_qdisc = fq"
+                echo "net.ipv4.tcp_congestion_control = bbr"
+            } > "/etc/sysctl.d/99-bbr-x-ui.conf"
+            if [ -f "/etc/sysctl.conf" ]; then
+                sed -i 's/^net.core.default_qdisc/# &/'          /etc/sysctl.conf
+                sed -i 's/^net.ipv4.tcp_congestion_control/# &/' /etc/sysctl.conf
+            fi
+            sysctl --system >/dev/null 2>&1
+        else
+            sed -i '/net.core.default_qdisc/d' /etc/sysctl.conf
+            sed -i '/net.ipv4.tcp_congestion_control/d' /etc/sysctl.conf
+            echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf
+            echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
+            sysctl -p >/dev/null 2>&1
+        fi
+
+        cc=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
+        if [[ "$cc" == "bbr" ]]; then
+            LOGI "BBR enabled successfully."
+        else
+            LOGE "Failed to enable BBR."
+        fi
     fi
 
-    # 2. Sysctl
-    LOGI "Applying aggressive network tuning..."
-    cat > /etc/sysctl.d/99-x-ui-speed.conf << 'SEOF'
-net.core.default_qdisc = fq
-net.ipv4.tcp_congestion_control = bbr
+    # --- Step 2: Apply aggressive sysctl tuning for speed ---
+    LOGI "Applying aggressive network performance tuning..."
+
+    local sysctl_file="/etc/sysctl.d/99-x-ui-speed.conf"
+    cat > "$sysctl_file" << 'SEOF'
+# === Speed Optimize by x-ui ===
+# TCP buffer sizes: min 4KB, default 16MB, max 64MB
+net.core.rmem_max = 67108864
+net.core.wmem_max = 67108864
+net.core.rmem_default = 16777216
+net.core.wmem_default = 16777216
+net.ipv4.tcp_rmem = 4096 16777216 67108864
+net.ipv4.tcp_wmem = 4096 16777216 67108864
+
+# TCP Fast Open (client + server)
 net.ipv4.tcp_fastopen = 3
+
+# Do not reset congestion window after idle
 net.ipv4.tcp_slow_start_after_idle = 0
+
+# Increase max connection tracking
+net.netfilter.nf_conntrack_max = 1048576
+
+# Conntrack timeout optimization
+net.netfilter.nf_conntrack_tcp_timeout_established = 7200
+net.netfilter.nf_conntrack_tcp_timeout_time_wait = 30
+
+# Increase backlog and somaxconn
+net.core.somaxconn = 65535
+net.core.netdev_max_backlog = 65535
+
+# Enable TCP window scaling
+net.ipv4.tcp_window_scaling = 1
+
+# Reuse TIME_WAIT sockets
+net.ipv4.tcp_tw_reuse = 1
+
+# Increase max orphans and max syn backlog
+net.ipv4.tcp_max_orphans = 65535
+net.ipv4.tcp_max_syn_backlog = 65535
+
+# Enable MTU probing
 net.ipv4.tcp_mtu_probing = 1
+
+# TCP SACK and timestamps
+net.ipv4.tcp_sack = 1
+net.ipv4.tcp_timestamps = 1
+
+# Tune TCP advanced window scaling and notsent lowat
+net.ipv4.tcp_adv_win_scale = -2
+net.ipv4.tcp_notsent_lowat = 131072
+net.core.optmem_max = 65536
+
+# Local port range
+net.ipv4.ip_local_port_range = 1024 65535
+
+# FIN and TIME_WAIT tuning
+net.ipv4.tcp_fin_timeout = 10
+net.ipv4.tcp_max_tw_buckets = 262144
+
+# Keep-alive tuning
 net.ipv4.tcp_keepalive_time = 300
 net.ipv4.tcp_keepalive_intvl = 15
 net.ipv4.tcp_keepalive_probes = 5
-net.ipv4.tcp_fin_timeout = 10
-net.ipv4.tcp_max_tw_buckets = 262144
-net.ipv4.tcp_tw_reuse = 1
-net.ipv4.tcp_window_scaling = 1
-net.ipv4.tcp_timestamps = 1
-net.ipv4.tcp_sack = 1
-net.ipv4.tcp_ecn = 0
-net.ipv4.tcp_adv_win_scale = -2
-net.ipv4.tcp_notsent_lowat = 131072
-net.core.rmem_max = 67108864
-net.core.wmem_max = 67108864
-net.core.rmem_default = 2097152
-net.core.wmem_default = 2097152
-net.ipv4.tcp_rmem = 4096 131072 67108864
-net.ipv4.tcp_wmem = 4096 65536 67108864
-net.core.optmem_max = 65536
-net.core.netdev_max_backlog = 65536
-net.core.somaxconn = 65536
-net.ipv4.ip_local_port_range = 1024 65535
-net.ipv4.tcp_max_orphans = 65536
 SEOF
-    sysctl -p /etc/sysctl.d/99-x-ui-speed.conf >/dev/null 2>&1
 
-    # 3. Show current state
+    sysctl -p "$sysctl_file" >/dev/null 2>&1
+    if [[ $? -eq 0 ]]; then
+        LOGI "Network performance tuning applied successfully."
+    else
+        LOGE "Some sysctl parameters could not be applied (conntrack module may not be loaded)."
+        LOGI "Retrying without conntrack parameters..."
+        # Retry without conntrack lines
+        grep -v 'nf_conntrack' "$sysctl_file" > "${sysctl_file}.tmp" && mv "${sysctl_file}.tmp" "$sysctl_file"
+        sysctl -p "$sysctl_file" >/dev/null 2>&1
+    fi
+
+    # --- Step 3: Show current speed settings ---
     echo ""
-    LOGI "Current settings:"
-    echo -e "  Congestion:  ${green}$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)${plain}"
-    echo -e "  Qdisc:       ${green}$(sysctl -n net.core.default_qdisc 2>/dev/null)${plain}"
-    echo -e "  FastOpen:    ${green}$(sysctl -n net.ipv4.tcp_fastopen 2>/dev/null)${plain}"
-    echo -e "  Rmem max:    ${green}$(( $(sysctl -n net.core.rmem_max 2>/dev/null) / 1048576 )) MB${plain}"
-    echo -e "  Wmem max:    ${green}$(( $(sysctl -n net.core.wmem_max 2>/dev/null) / 1048576 )) MB${plain}"
-    echo -e "  SlowStart:   ${green}$(sysctl -n net.ipv4.tcp_slow_start_after_idle 2>/dev/null) (0=disabled=good)${plain}"
+    echo -e "${green}────────────────────────────────────────${plain}"
+    echo -e "${green}  Current Network Speed Settings${plain}"
+    echo -e "${green}────────────────────────────────────────${plain}"
+    echo -e "  Congestion Control : ${blue}$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)${plain}"
+    echo -e "  Queue Discipline   : ${blue}$(sysctl -n net.core.default_qdisc 2>/dev/null)${plain}"
+    echo -e "  TCP Fast Open      : ${blue}$(sysctl -n net.ipv4.tcp_fastopen 2>/dev/null)${plain}"
+    echo -e "  Slow Start Idle    : ${blue}$(sysctl -n net.ipv4.tcp_slow_start_after_idle 2>/dev/null)${plain}"
+    echo -e "  rmem_max           : ${blue}$(( $(sysctl -n net.core.rmem_max 2>/dev/null) / 1048576 )) MB${plain}"
+    echo -e "  wmem_max           : ${blue}$(( $(sysctl -n net.core.wmem_max 2>/dev/null) / 1048576 )) MB${plain}"
+    echo -e "  tcp_rmem           : ${blue}$(sysctl -n net.ipv4.tcp_rmem 2>/dev/null)${plain}"
+    echo -e "  tcp_wmem           : ${blue}$(sysctl -n net.ipv4.tcp_wmem 2>/dev/null)${plain}"
+    echo -e "  somaxconn          : ${blue}$(sysctl -n net.core.somaxconn 2>/dev/null)${plain}"
+    echo -e "  tcp_tw_reuse       : ${blue}$(sysctl -n net.ipv4.tcp_tw_reuse 2>/dev/null)${plain}"
+    local conntrack_max=$(sysctl -n net.netfilter.nf_conntrack_max 2>/dev/null)
+    if [[ -n "$conntrack_max" ]]; then
+        echo -e "  conntrack_max      : ${blue}${conntrack_max}${plain}"
+    else
+        echo -e "  conntrack_max      : ${yellow}N/A (module not loaded)${plain}"
+    fi
+    echo -e "${green}────────────────────────────────────────${plain}"
     echo ""
-    LOGI "Speed optimization applied!"
+    LOGI "Speed optimization complete!"
 
     if [[ $# == 0 ]]; then
         before_show_menu
@@ -1695,37 +1781,83 @@ SEOF
 }
 
 show_vless_reality_guide() {
-    echo -e "${green}━━━━━━━ VLESS+Reality Setup Guide ━━━━━━━${plain}"
+    echo -e "${green}════════════════════════════════════════════════════════════════${plain}"
+    echo -e "${green}         VLESS + Reality Optimal Inbound Setup Guide${plain}"
+    echo -e "${green}════════════════════════════════════════════════════════════════${plain}"
     echo ""
-    echo -e "  ${blue}Optimal settings for maximum speed:${plain}"
+    echo -e "${yellow}Step 1: Prerequisites${plain}"
+    echo -e "  - A server with x-ui panel installed and running"
+    echo -e "  - A domain is ${red}NOT${plain} required (Reality uses SNI spoofing)"
+    echo -e "  - Make sure port 443 is available or choose another port"
     echo ""
-    echo -e "  1. Panel → ${green}Inbounds${plain} → ${green}Add Inbound${plain}"
-    echo -e "  2. Remark: any name"
-    echo -e "  3. Protocol: ${green}VLESS${plain}"
-    echo -e "  4. Port: ${green}443${plain}"
-    echo -e "  5. Transport: ${green}TCP${plain}"
-    echo -e "  6. Security: ${green}Reality${plain}"
-    echo -e "  7. Target (dest): ${green}www.microsoft.com:443${plain}"
-    echo -e "  8. SNI (serverNames): ${green}www.microsoft.com${plain}"
-    echo -e "  9. Fingerprint (uTLS): ${green}chrome${plain}"
-    echo -e " 10. Client → Flow: ${green}xtls-rprx-vision${plain}"
-    echo -e " 11. Generate keys: ${green}x-ui x25519${plain}"
+    echo -e "${yellow}Step 2: Create a new Inbound in x-ui Panel${plain}"
+    echo -e "  1. Log in to x-ui web panel"
+    echo -e "  2. Go to ${blue}Inbounds${plain} -> ${blue}Add Inbound${plain}"
+    echo -e "  3. Configure as follows:"
     echo ""
-    echo -e "  ${yellow}Why microsoft.com:${plain}"
-    echo -e "    - CDN closer to most servers = lower latency"
-    echo -e "    - TLS 1.3 + H2 by default"
-    echo -e "    - Rarely blocked by DPI"
+    echo -e "${yellow}  ┌─────────────────────────────────────────────────────┐${plain}"
+    echo -e "${yellow}  │${plain}  Remark       : ${blue}VLESS-Reality${plain}                        ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  Protocol     : ${blue}vless${plain}                                ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  Listen IP    : ${blue}(leave empty)${plain}                        ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  Port         : ${blue}443${plain} (or any open port)               ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  Total Traffic: ${blue}0${plain} (unlimited) or set limit           ${yellow}│${plain}"
+    echo -e "${yellow}  └─────────────────────────────────────────────────────┘${plain}"
     echo ""
-    echo -e "  ${yellow}Alternative dest targets:${plain}"
-    echo -e "    - ${green}www.apple.com:443${plain}"
-    echo -e "    - ${green}www.amazon.com:443${plain}"
-    echo -e "    - ${green}dl.google.com:443${plain}"
+    echo -e "${yellow}Step 3: Client Settings${plain}"
+    echo -e "${yellow}  ┌─────────────────────────────────────────────────────┐${plain}"
+    echo -e "${yellow}  │${plain}  Email         : ${blue}user1@example.com${plain} (any identifier)  ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  Flow          : ${blue}xtls-rprx-vision${plain}  ${red}<-- IMPORTANT${plain}   ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  Fingerprint   : ${blue}chrome${plain}                              ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  (ID is auto-generated, keep it)                    ${yellow}│${plain}"
+    echo -e "${yellow}  └─────────────────────────────────────────────────────┘${plain}"
     echo ""
-    echo -e "  ${yellow}Client apps:${plain}"
-    echo -e "    - iOS/Mac: ${green}Streisand, V2Box${plain}"
-    echo -e "    - Android: ${green}V2rayNG, NekoBox${plain}"
-    echo -e "    - Windows: ${green}V2rayN, NekoRay${plain}"
+    echo -e "${yellow}Step 4: Transport Settings${plain}"
+    echo -e "${yellow}  ┌─────────────────────────────────────────────────────┐${plain}"
+    echo -e "${yellow}  │${plain}  Transmission : ${blue}TCP${plain}                                  ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  Accept Proxy : ${blue}false${plain}                                ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  HTTP Masking  : ${blue}none${plain} (not needed with Reality)      ${yellow}│${plain}"
+    echo -e "${yellow}  └─────────────────────────────────────────────────────┘${plain}"
     echo ""
+    echo -e "${yellow}Step 5: Security / TLS Settings  ${red}<-- CRITICAL${plain}"
+    echo -e "${yellow}  ┌─────────────────────────────────────────────────────┐${plain}"
+    echo -e "${yellow}  │${plain}  Security     : ${blue}Reality${plain}                              ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  Show         : ${blue}(click to generate keys)${plain}             ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  Dest (SNI)   : ${blue}www.microsoft.com:443${plain}                ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  Server Names : ${blue}www.microsoft.com${plain}                    ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}                                                     ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}  ${green}Good SNI targets (low latency, TLS 1.3, H2):${plain}       ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}    - ${blue}www.microsoft.com${plain}                               ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}    - ${blue}www.google.com${plain}                                  ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}    - ${blue}www.samsung.com${plain}                                 ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}    - ${blue}www.googletagmanager.com${plain}                        ${yellow}│${plain}"
+    echo -e "${yellow}  │${plain}    - ${blue}dl.google.com${plain}                                   ${yellow}│${plain}"
+    echo -e "${yellow}  └─────────────────────────────────────────────────────┘${plain}"
+    echo ""
+    echo -e "${yellow}Step 6: Sniffing Settings${plain}"
+    echo -e "  - Enable Sniffing: ${blue}ON${plain}"
+    echo -e "  - Dest Override  : ${blue}http, tls, quic, fakedns${plain}"
+    echo ""
+    echo -e "${yellow}Step 7: Generate Keys${plain}"
+    echo -e "  - Run: ${green}x-ui x25519${plain} or generate in panel UI"
+    echo -e "  - Copy the Private Key into the inbound settings"
+    echo -e "  - The Public Key goes to client config"
+    echo ""
+    echo -e "${yellow}Step 8: Save and Connect${plain}"
+    echo -e "  1. Click ${blue}Add Inbound${plain} to save"
+    echo -e "  2. Click the QR code icon or copy the share link"
+    echo -e "  3. Import into your client app:"
+    echo -e "     - iOS     : ${blue}Streisand, V2Box, Shadowrocket${plain}"
+    echo -e "     - Android : ${blue}V2rayNG, NekoBox, Hiddify${plain}"
+    echo -e "     - Windows : ${blue}V2rayN, Hiddify, NekoRay${plain}"
+    echo -e "     - macOS   : ${blue}V2rayN, NekoRay, Hiddify${plain}"
+    echo ""
+    echo -e "${yellow}Performance Tips:${plain}"
+    echo -e "  - Use menu option ${green}27 (Speed Optimize)${plain} to enable BBR & tune buffers"
+    echo -e "  - Pick an SNI target geographically close to your server"
+    echo -e "  - ${blue}xtls-rprx-vision${plain} flow is mandatory for VLESS+Reality"
+    echo -e "  - REALITY does NOT need any real SSL certificate"
+    echo ""
+    echo -e "${green}════════════════════════════════════════════════════════════════${plain}"
 
     if [[ $# == 0 ]]; then
         before_show_menu
