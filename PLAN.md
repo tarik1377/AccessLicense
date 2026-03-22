@@ -1,123 +1,201 @@
-# План: Anti-Detection + Скорость + Цепочки
+# План: Anti-Detection + Максимальная скорость + Цепочки
 
-## Проблема: Connection Patterns (ВЫСОКИЙ РИСК)
+## Итоги исследования (4 агента на Opus)
 
-DPI видит:
-- Один IP, много долгоживущих TCP-соединений (5+ минут) — не похоже на браузер
-- Браузер открывает 2-6 параллельных HTTP/2 соединений на 30-120 секунд и закрывает
-- VPN держит 1 соединение часами с постоянным потоком данных
-- Нет мультиплексирования — каждый запрос = новая TCP-сессия
+### Что уже есть в коде:
+- Fragment + Noise (sub/default.json, config.json)
+- Vision testseed рандомизация (crypto.getRandomValues + prime jitter)
+- SpiderX 45+ реалистичных путей
+- Reality hardening (rejectUnknownSni, maxTimediff=5000)
+- WARP полный API (регистрация, конфиг, лицензия)
+- xHTTP transport с xmux и padding obfuscation
+- ML-DSA-65 пост-квантовая верификация
+- MUX (но отключается при Vision flow!)
 
-## Решение: 5 уровней защиты
+### Критические bottleneck-и скорости:
+1. **bufferSize=4 KB** — ГЛАВНЫЙ ТОРМОЗ! Надо 0 (без лимита)
+2. **connIdle рассинхрон** — сервер 120, клиент 300. Сервер убивает раньше
+3. **Noise на сервере** — 2 источника ~18 KB/s на соединение. Лишний overhead
+4. **Fragment interval 10-15ms** — 50-150ms latency на handshake. Надо 5-10ms
+5. **Fragment length 50-100** — слишком узкий. Надо 100-200 (меньше фрагментов)
 
-### Уровень 1: MUX — имитация HTTP/2 браузера
-**Файлы:** `sub/subJsonService.go`, `sub/default.json`
+### Ключевое ограничение:
+**MUX и Vision (flow) несовместимы** — Vision = zero-copy (splice), MUX = userspace processing.
+Это значит: при VLESS+Reality+Vision+TCP мы НЕ можем включить MUX.
+Но: xHTTP имеет встроенный xmux, который работает ВМЕСТО MUX.
 
-Что делаем:
-- mux concurrency: 8 (уже есть) — 8 потоков в 1 TLS = как HTTP/2
-- НО: нужно добавить ротацию соединений — закрывать через 60-120 сек и открывать новые
-- xHTTP transport вместо TCP — трафик выглядит как реальные HTTP запросы
+### Два профиля использования:
 
-Конкретно:
-1. `sub/default.json` — добавить mux config в proxy outbound
-2. `sub/subJsonService.go` — убедиться что mux включается для VLESS+Vision (сейчас отключается при flow!)
-3. Policy `connIdle: 60` вместо 120-300 — короче сессии = больше похоже на браузер
+**Профиль SPEED (TCP+Vision) — максимальная скорость:**
+```
+VLESS + Reality + Vision + TCP
+  - Zero-copy (splice) — 0.5-2% overhead
+  - Fragment на handshake — 0% потеря данных
+  - Noise минимальный — 1% overhead
+  - connIdle=300, keepalive=30
+  - bufferSize=0 (без лимита!)
+```
 
-### Уровень 2: Fragment + Noise с реалистичными распределениями
+**Профиль STEALTH (xHTTP) — максимальная скрытность:**
+```
+VLESS + Reality + xHTTP (без Vision)
+  - xmux: 16-32 потока (имитация HTTP/2)
+  - Padding obfuscation (tokenish)
+  - Каждый chunk = HTTP POST/GET
+  - 5-15% overhead, но НЕОТЛИЧИМ от обычного веба
+  - Для случаев когда TCP детектируют
+```
+
+---
+
+## Фаза 1: Скоростные фиксы (0% потеря скорости)
+
+### 1.1 bufferSize 4 → 0
+**Файл:** `web/service/config.json`
+- `"bufferSize": 4` → `"bufferSize": 0`
+- Эффект: убирает искусственное ограничение буфера, throughput может вырасти в разы
+
+### 1.2 connIdle синхронизация
+**Файлы:** `web/service/config.json`, `sub/default.json`
+- Сервер: `connIdle: 120` → `300`
+- Клиент: оставить `300`
+- handshake: оставить `4` (2 мало для высоко-latency)
+- downlinkOnly клиент: `1` → `5` (не рвать крупные загрузки)
+
+### 1.3 Fragment оптимизация
 **Файлы:** `sub/default.json`, `web/service/config.json`
+- length: `"50-100"` → `"100-200"` (крупнее = меньше фрагментов = быстрее)
+- interval: `"10-15"` → `"5-10"` (быстрее handshake)
+- Итого: ~22-30ms вместо 50-150ms на handshake
 
-Что делаем:
-- Fragment length: `30-300` вместо `50-100` (шире = менее предсказуемо)
-- Noise packet: `50-1300` вместо `10-30` (имитация реальных TLS records, 1300≈MTU)
-- Noise delay: `5-50` вместо `10-16` (шире диапазон — сложнее ML)
-- На сервере: noise `50-1400` (полный MSS range)
+### 1.4 Noise оптимизация (меньше overhead)
+**Файл:** `web/service/config.json`
+- Убрать 2-й noise source на сервере (лишний ~18 KB/s)
+- 1 source: `"packet": "50-150", "delay": "50-150"` → ~750 B/s overhead
 
-### Уровень 3: WARP Chain по умолчанию
-**Файлы:** `web/service/config.json`, `deploy.sh`
+**Файл:** `sub/default.json`
+- Клиент: `"packet": "10-30"` → `"50-100"`, `"delay": "10-16"` → `"30-80"`
 
-Что делаем:
-- Добавить WireGuard (WARP) outbound в серверный шаблон
-- Routing: весь не-RU трафик → WARP → интернет
-- Сервер перестаёт быть конечной точкой — DPI видит только WG трафик к Cloudflare
-- deploy.sh: автоматическая регистрация WARP при установке
+---
 
-### Уровень 4: xHTTP transport (SplitHTTP) как альтернатива TCP
-**Файлы:** `sub/subService.go`, панель UI
+## Фаза 2: Anti-Detection (0-1% потеря скорости)
 
-xHTTP = трафик выглядит как обычные HTTP POST/GET запросы
-- Каждый chunk данных = отдельный HTTP запрос
-- xmux: maxConcurrency 16-32, hMaxReusableSecs 1800-3000
-- Padding с obfuscation
-- Уже поддерживается в коде! Нужно только сделать рекомендуемым
+### 2.1 Vision testseed — уже усилено ✓
+- crypto.getRandomValues(), диапазоны 200-2400, prime jitter
 
-### Уровень 5: Ротация соединений и connection reuse patterns
-**Файлы:** `sub/default.json`, `web/service/xray.go`
+### 2.2 SpiderX — уже усилено ✓
+- 45+ путей, timestamps, session IDs
 
-Что делаем:
-- Policy connIdle: 60 (закрывать idle через 60 сек как браузер)
-- tcpKeepAliveIdle: 30 (вместо 100 — браузеры шлют keepalive чаще)
-- Добавить connection lifetime limit через policy
+### 2.3 ML-DSA-65 рекомендация
+- В гайде (x-ui.sh меню 28) добавить шаг: "Get New mldsa65 Seed" при создании Reality inbound
+- Пост-квантовая защита — бесплатно, 0% overhead
 
-## Порядок реализации
+### 2.4 Fingerprint ротация
+**Файл:** `sub/subService.go`
+- Вместо фиксированного `fp=chrome` — случайный выбор из: chrome, firefox, safari, edge
+- Каждая подписка получает случайный fingerprint
+- 0% overhead, усложняет корреляцию
 
-### Фаза 1: Быстрые wins (default.json + config.json)
-1. [x] Fragment/noise расширить диапазоны
-2. [ ] Mux добавить в default.json для proxy outbound
-3. [ ] Policy connIdle уменьшить до 60
-4. [ ] Noise на сервере расширить до 50-1400
+---
 
-### Фаза 2: WARP Chain
-5. [ ] WARP outbound в config.json шаблон
-6. [ ] Routing rule: не-RU → warp outbound
-7. [ ] deploy.sh: автоматическая регистрация WARP
-8. [ ] x-ui.sh: пункт меню "Setup WARP Chain"
+## Фаза 3: WARP Chain (опция в меню, не по дефолту)
 
-### Фаза 3: Рекомендация xHTTP
-9. [ ] В гайде Reality рекомендовать xHTTP вместо TCP
-10. [ ] xHTTP defaults оптимизировать (xmux параметры)
-11. [ ] Subscription links с xHTTP параметрами
+### 3.1 WARP как опция
+- НЕ включать по дефолту (10-20% потеря скорости + 10-50ms latency)
+- Добавить в x-ui.sh меню "Setup WARP Chain" (автоматическая регистрация + конфиг)
+- Routing rule: определённые домены → WARP (не весь трафик)
 
-### Фаза 4: Финальный hardening
-12. [ ] Ротация uTLS fingerprint между соединениями (subService.go)
-13. [ ] SpiderX path — привязка к dest (microsoft paths для microsoft dest)
-14. [ ] Testseed wider ranges уже сделано ✓
+### 3.2 Когда включать WARP:
+- IP сервера заблокирован
+- Нужен "чистый" Cloudflare IP
+- Обход geo-restrictions
+- Максимальная анонимность (IP сервера скрыт от назначений)
+
+---
+
+## Фаза 4: xHTTP как запасной транспорт
+
+### 4.1 xHTTP + Reality (без Vision)
+- Для случаев когда TCP+Reality детектируется
+- xmux заменяет MUX (16-32 потока)
+- Padding obfuscation (tokenish, 100-1000 байт)
+- 5-15% overhead, но полная скрытность
+
+### 4.2 xHTTP defaults
+```
+path: /api/v1/data
+mode: auto
+xPaddingBytes: 100-1000
+xPaddingObfsMode: true
+xPaddingMethod: tokenish
+sessionPlacement: cookie
+sessionKey: session_id
+xmux.maxConcurrency: 16-32
+xmux.hMaxReusableSecs: 1800-3000
+```
+
+---
 
 ## Оптимальная цепочка (итог)
 
+### По дефолту (SPEED — 0-1% потеря):
 ```
-Клиент (V2rayN/Streisand)
+Клиент (V2rayN / Streisand)
   │
-  ├─ MUX: 8 потоков в 1 TLS (как HTTP/2 браузер)
-  ├─ Fragment: TLS hello → 30-300 байт (ломает DPI сигнатуры)
-  ├─ Noise: 50-1300 байт (имитация реальных TLS records)
-  ├─ uTLS: chrome (ротация)
+  ├─ Fragment: TLS hello → 100-200 байт, interval 5-10ms
+  ├─ Noise: 50-100 байт, delay 30-80ms (минимальный)
+  ├─ uTLS: случайный (chrome/firefox/safari/edge)
   │
   ▼
-[VLESS + Reality + Vision] ──── порт 443
-  │   dest: www.microsoft.com
+[VLESS + Reality + Vision + TCP] ──── порт 443
+  │   dest: www.microsoft.com:443
   │   SNI: www.microsoft.com
-  │   SpiderX: /en-us/windows/... (реалистичные MS пути)
-  │   connIdle: 60s (как браузер)
+  │   SpiderX: реалистичные MS/CDN пути
+  │   ML-DSA-65: пост-квантовая верификация
+  │   bufferSize: 0 (без лимита!)
+  │   connIdle: 300s
   │
   ▼
-[WARP outbound] ──── WireGuard → Cloudflare CDN
-  │   IP сервера скрыт от назначения
-  │   Трафик = обычный CDN
-  │
-  ▼
-Интернет (google.com, youtube.com, etc.)
+Интернет
 
-Российские сайты → Direct (split tunnel, без VPN)
+RU сайты → Direct (split tunnel)
 ```
 
-## Что видит DPI на каждом уровне
+### При блокировке TCP (STEALTH — 5-15% потеря):
+```
+Переключить транспорт TCP → xHTTP в панели
+  │
+  ├─ xmux: 16-32 потока (как HTTP/2)
+  ├─ Padding: tokenish obfuscation
+  ├─ Каждый chunk = HTTP POST
+  │
+  ▼
+[VLESS + Reality + xHTTP] ──── порт 443
+```
 
-| DPI видит | Что это на самом деле | Вердикт DPI |
+### При блокировке IP (+ WARP):
+```
+Включить WARP Chain в меню x-ui
+  │
+  ▼
+[Сервер] → [WARP WireGuard] → [Cloudflare CDN] → Интернет
+```
+
+## Что видит DPI
+
+| DPI видит | Реальность | Вердикт |
 |---|---|---|
-| TLS 1.3 к www.microsoft.com:443 | VLESS+Reality | "Легитимный Microsoft трафик" |
-| Chrome TLS fingerprint | uTLS имитация | "Обычный браузер" |
-| 2-8 параллельных потоков | MUX внутри 1 TLS | "HTTP/2 мультиплексирование" |
-| Соединения живут 60 сек | connIdle=60 | "Обычный браузинг" |
-| Фрагменты 30-300 байт | Fragment | "MTU issues / packet loss" |
-| Нет DNS запросов в plaintext | DoH через 1.1.1.1 | "Современный браузер" |
-| RU сайты идут напрямую | Split tunnel | "Пользователь в РФ, всё ок" |
+| TLS 1.3 к microsoft.com:443 | VLESS+Reality | "Обычный Microsoft трафик" |
+| Chrome/Firefox fingerprint | uTLS (ротация) | "Обычный браузер" |
+| Соединения живут 300 сек | connIdle=300 | "Нормальный браузинг" |
+| Фрагменты 100-200 байт | Fragment | "MTU issues" |
+| Нет plaintext DNS | DoH 1.1.1.1 | "Современный браузер" |
+| RU сайты напрямую | Split tunnel | "Пользователь в РФ" |
+| PQ параметры | ML-DSA-65 | "Защищённое соединение" |
+
+## Файлы для изменения (Фаза 1)
+
+1. `web/service/config.json` — bufferSize, connIdle, noise, fragment
+2. `sub/default.json` — fragment, noise, policy, downlinkOnly
+3. `sub/subService.go` — fingerprint ротация
+4. `x-ui.sh` — обновить гайд (ML-DSA-65, xHTTP как backup)
