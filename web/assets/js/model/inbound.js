@@ -785,13 +785,10 @@ class RealityStreamSettings extends XrayCommonClass {
         settings = new RealityStreamSettings.Settings()
     ) {
         super();
-        // If target/serverNames are not provided, use random values
+        // If target/serverNames are not provided, use Yandex as default
         if (!target && !serverNames) {
-            const randomTarget = typeof getRandomRealityTarget !== 'undefined'
-                ? getRandomRealityTarget()
-                : { target: 'www.apple.com:443', sni: 'www.apple.com,apple.com' };
-            target = randomTarget.target;
-            serverNames = randomTarget.sni;
+            target = 'yandex.ru:443';
+            serverNames = 'yandex.ru,ya.ru';
         }
         this.show = show;
         this.xver = xver;
@@ -852,7 +849,7 @@ class RealityStreamSettings extends XrayCommonClass {
 RealityStreamSettings.Settings = class extends XrayCommonClass {
     constructor(
         publicKey = '',
-        fingerprint = UTLS_FINGERPRINT.UTLS_CHROME_AUTO,
+        fingerprint = UTLS_FINGERPRINT.UTLS_CHROME,
         serverName = '',
         spiderX = '/',
         mldsa65Verify = ''

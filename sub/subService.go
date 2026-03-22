@@ -1103,7 +1103,10 @@ func generateSpiderXForDest(dest string) string {
 		}
 		return paths[random.Num(len(paths))]
 
-	case host == "yandex.ru" || host == "ya.ru":
+	case host == "yandex.ru" || host == "ya.ru" ||
+		strings.HasSuffix(host, ".yandex.ru") ||
+		strings.HasSuffix(host, ".yandexcloud.net") ||
+		host == "yastatic.net" || strings.HasSuffix(host, ".yastatic.net"):
 		paths := []string{
 			"/search?text=%D0%BF%D0%BE%D0%B3%D0%BE%D0%B4%D0%B0+%D0%BC%D0%BE%D1%81%D0%BA%D0%B2%D0%B0&lr=213&sid=" + sessionId,
 			"/images/search?text=%D0%BA%D0%BE%D1%82%D0%B8%D0%BA%D0%B8&t=" + timestamp,
@@ -1112,6 +1115,13 @@ func generateSpiderXForDest(dest string) string {
 			"/maps/?ll=37.6173,55.7558&z=10&sid=" + sessionId,
 			"/market/product/" + fmt.Sprintf("%d", 10000+random.Num(90000)),
 			"/video/search?text=%D0%BA%D0%B0%D0%BA+%D0%B3%D0%BE%D1%82%D0%BE%D0%B2%D0%B8%D1%82%D1%8C",
+			"/watch/" + fmt.Sprintf("%d", 10000000+random.Num(90000000)),
+			"/metrika/tag.js?t=" + timestamp,
+			"/d/" + random.Seq(8),
+			"/client/disk",
+			"/handlers/track.jsx?track=" + fmt.Sprintf("%d", 10000+random.Num(90000)),
+			"/folders/" + random.Seq(8),
+			"/compute/instances?sid=" + sessionId,
 		}
 		return paths[random.Num(len(paths))]
 
@@ -1141,15 +1151,6 @@ func generateSpiderXForDest(dest string) string {
 			"/api/v1/messages?sid=" + sessionId,
 			"/calendar/",
 			"/cloud/",
-		}
-		return paths[random.Num(len(paths))]
-
-	case host == "storage.yandexcloud.net" || strings.HasSuffix(host, ".storage.yandexcloud.net"):
-		bucket := random.Seq(8)
-		paths := []string{
-			"/" + bucket + "/data/export-2024.csv",
-			"/" + bucket + "/backup/db-dump.sql.gz",
-			"/" + bucket + "/logs/access.log",
 		}
 		return paths[random.Num(len(paths))]
 
