@@ -1,9 +1,10 @@
 #!/bin/bash
 
 #=================================================================
-# AccessLicense Deployment Script
-# Устанавливает панель с Go 1.26, Xray-core latest, anti-detection
-# Использование: bash deploy.sh
+# AccessLicense Deploy Script (non-interactive)
+# Скачивает release (как install.sh), настраивает панель,
+# ставит x-ui меню, nginx-камуфляж, firewall, sysctl, fail2ban
+# Использование: bash deploy.sh [version]
 #=================================================================
 
 set -e
@@ -17,11 +18,9 @@ PANEL_PATH="/secretpanel/"
 SUB_PATH="/feed/"
 SUB_JSON_PATH="/config/"
 XUI_FOLDER="/usr/local/x-ui"
+XUI_SERVICE="/etc/systemd/system"
 DB_PATH="/etc/x-ui/3xui.db"
-GO_VERSION="1.26.0"
-XRAY_VERSION="v26.2.6"
-REPO_URL="https://github.com/tarik1377/AccessLicense.git"
-REPO_BRANCH="claude/repository-work-HtU4s"
+REPO="tarik1377/AccessLicense"
 # ========================================================
 
 RED='\033[0;31m'
@@ -38,184 +37,181 @@ err()  { echo -e "${RED}[x]${NC} $1"; exit 1; }
 # Проверка root
 [[ $EUID -ne 0 ]] && err "Запусти от root: sudo bash deploy.sh"
 
+# OS detection
+if [[ -f /etc/os-release ]]; then
+    source /etc/os-release
+    release=$ID
+elif [[ -f /usr/lib/os-release ]]; then
+    source /usr/lib/os-release
+    release=$ID
+else
+    err "Не удалось определить ОС"
+fi
+
+arch() {
+    case "$(uname -m)" in
+        x86_64 | x64 | amd64) echo 'amd64' ;;
+        i*86 | x86) echo '386' ;;
+        armv8* | armv8 | arm64 | aarch64) echo 'arm64' ;;
+        armv7* | armv7 | arm) echo 'armv7' ;;
+        armv6* | armv6) echo 'armv6' ;;
+        armv5* | armv5) echo 'armv5' ;;
+        s390x) echo 's390x' ;;
+        *) err "Архитектура $(uname -m) не поддерживается" ;;
+    esac
+}
+
+PLATFORM=$(arch)
 SERVER_IP=$(curl -s4 --connect-timeout 5 ifconfig.me || curl -s4 --connect-timeout 5 api.ipify.org || echo "UNKNOWN")
 
 log "============================================"
 log "  AccessLicense Deploy"
-log "  Server: ${SERVER_IP}"
-log "  Go: ${GO_VERSION} | Xray: ${XRAY_VERSION}"
+log "  Server: ${SERVER_IP} | Arch: ${PLATFORM}"
 log "  Panel: ${PANEL_PORT} | Subs: ${SUB_PORT}"
 log "============================================"
 
 # 1. Остановить старую версию
-log "Останавливаю старую сборку..."
+log "Останавливаю старую версию..."
 systemctl stop x-ui 2>/dev/null || true
 systemctl disable x-ui 2>/dev/null || true
-# Убить если зомби
 pkill -f "x-ui" 2>/dev/null || true
 sleep 1
 
 # 2. Зависимости
 log "Устанавливаю зависимости..."
-if command -v apt-get &>/dev/null; then
-    apt-get update -qq
-    apt-get install -y -qq curl tar wget git socat unzip ca-certificates \
-        tzdata fail2ban sqlite3 python3 gcc make >/dev/null 2>&1
-elif command -v yum &>/dev/null; then
-    yum install -y -q curl tar wget git socat unzip ca-certificates \
-        tzdata fail2ban sqlite gcc make >/dev/null 2>&1
+case "${release}" in
+    ubuntu | debian | armbian)
+        apt-get update -qq
+        apt-get install -y -qq curl tar wget socat unzip ca-certificates \
+            tzdata fail2ban sqlite3 nginx cron >/dev/null 2>&1
+    ;;
+    fedora | amzn | rhel | almalinux | rocky | ol)
+        dnf -y update -q
+        dnf install -y -q curl tar wget socat unzip ca-certificates \
+            tzdata fail2ban sqlite nginx cronie >/dev/null 2>&1
+    ;;
+    centos)
+        if [[ "${VERSION_ID}" =~ ^7 ]]; then
+            yum install -y curl tar wget socat unzip ca-certificates \
+                tzdata fail2ban sqlite nginx cronie >/dev/null 2>&1
+        else
+            dnf install -y -q curl tar wget socat unzip ca-certificates \
+                tzdata fail2ban sqlite nginx cronie >/dev/null 2>&1
+        fi
+    ;;
+    arch | manjaro | parch)
+        pacman -Syu --noconfirm curl tar wget socat unzip ca-certificates \
+            tzdata fail2ban sqlite nginx >/dev/null 2>&1
+    ;;
+    *)
+        apt-get update -qq && apt-get install -y -qq curl tar wget socat unzip \
+            ca-certificates tzdata fail2ban sqlite3 nginx cron >/dev/null 2>&1
+    ;;
+esac
+
+# 3. Скачиваем release (как install.sh — готовый бинарник, без Go build)
+log "Скачиваю release..."
+cd ${XUI_FOLDER%/x-ui}/
+
+if [ $# -ge 1 ]; then
+    TAG="$1"
+else
+    TAG=$(curl -4Ls "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    if [[ -z "$TAG" ]]; then
+        err "Не удалось получить последнюю версию. Проверь GitHub Releases: https://github.com/${REPO}/releases"
+    fi
+fi
+log "Версия: ${TAG}"
+
+TARBALL="x-ui-linux-${PLATFORM}.tar.gz"
+curl -4fLRo "${TARBALL}" "https://github.com/${REPO}/releases/download/${TAG}/${TARBALL}"
+if [[ $? -ne 0 ]]; then
+    err "Не удалось скачать release ${TAG}. Убедись что release существует: https://github.com/${REPO}/releases"
 fi
 
-# 3. Архитектура
-ARCH=$(uname -m)
-case "$ARCH" in
-    x86_64)  PLATFORM="amd64"; GO_ARCH="amd64" ;;
-    aarch64) PLATFORM="arm64"; GO_ARCH="arm64" ;;
-    armv7l)  PLATFORM="armv7"; GO_ARCH="armv6l" ;;
-    *)       err "Архитектура $ARCH не поддерживается" ;;
-esac
-log "Архитектура: ${PLATFORM}"
-
-# 4. Устанавливаем Go 1.26
-install_go() {
-    local CURRENT_GO=""
-    if command -v go &>/dev/null; then
-        CURRENT_GO=$(go version 2>/dev/null | grep -oP 'go\K[0-9.]+' || echo "")
-    fi
-
-    if [ "$CURRENT_GO" = "$GO_VERSION" ]; then
-        log "Go ${GO_VERSION} уже установлен"
-        return
-    fi
-
-    log "Устанавливаю Go ${GO_VERSION}..."
-    rm -rf /usr/local/go
-    wget -q --show-progress "https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz" -O /tmp/go.tar.gz
-    tar -C /usr/local -xzf /tmp/go.tar.gz
-    rm /tmp/go.tar.gz
-
-    # Добавляем в PATH глобально
-    if ! grep -q '/usr/local/go/bin' /etc/profile.d/go.sh 2>/dev/null; then
-        echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
-    fi
-    export PATH=$PATH:/usr/local/go/bin
-
-    log "Go $(go version) установлен"
-}
-
-install_go
-
-# 5. Клонируем и собираем
-log "Клонирую репозиторий AccessLicense..."
-cd /tmp
-rm -rf AccessLicense
-git clone --depth=1 -b "${REPO_BRANCH}" "${REPO_URL}" AccessLicense
-cd AccessLicense
-
-log "Собираю бинарник (Go ${GO_VERSION}, CGO enabled)..."
-export CGO_ENABLED=1
-go build -ldflags "-w -s" -o x-ui main.go
-log "Бинарник собран: $(file x-ui | cut -d: -f2)"
-
-# 6. Устанавливаем
+# 4. Устанавливаем
 log "Устанавливаю в ${XUI_FOLDER}..."
 rm -rf ${XUI_FOLDER}
-mkdir -p ${XUI_FOLDER}/bin
+tar zxf "${TARBALL}"
+rm -f "${TARBALL}"
 
-cp x-ui ${XUI_FOLDER}/
-cp x-ui.sh ${XUI_FOLDER}/
-chmod +x ${XUI_FOLDER}/x-ui ${XUI_FOLDER}/x-ui.sh
+cd x-ui
+chmod +x x-ui x-ui.sh
 
-# 7. Xray-core
-log "Скачиваю Xray-core ${XRAY_VERSION}..."
-cd ${XUI_FOLDER}/bin
-case "$PLATFORM" in
-    amd64) XRAY_FILE="Xray-linux-64.zip" ;;
-    arm64) XRAY_FILE="Xray-linux-arm64-v8a.zip" ;;
-    armv7) XRAY_FILE="Xray-linux-arm32-v7a.zip" ;;
-esac
-wget -q --show-progress "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/${XRAY_FILE}"
-unzip -qo "${XRAY_FILE}"
-rm -f "${XRAY_FILE}" README.md LICENSE
-mv xray "xray-linux-${PLATFORM}"
-chmod +x "xray-linux-${PLATFORM}"
+# ARM rename
+if [[ "${PLATFORM}" == "armv5" || "${PLATFORM}" == "armv6" || "${PLATFORM}" == "armv7" ]]; then
+    mv bin/xray-linux-${PLATFORM} bin/xray-linux-arm
+    chmod +x bin/xray-linux-arm
+fi
+chmod +x bin/xray-linux-${PLATFORM} 2>/dev/null || true
 
-# 8. Geo-данные (включая RU для split tunneling)
-log "Скачиваю geo-данные..."
-rm -f geoip.dat geosite.dat geoip_RU.dat geosite_RU.dat
-wget -q "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat"
-wget -q "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
-wget -q -O geoip_RU.dat "https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geoip.dat"
-wget -q -O geosite_RU.dat "https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geosite.dat"
-log "Geo-данные: $(ls -1 *.dat | wc -l) файлов"
+# 5. Ставим x-ui.sh как команду /usr/bin/x-ui (интерактивное меню)
+log "Устанавливаю команду x-ui..."
+curl -4fLRo /usr/bin/x-ui "https://raw.githubusercontent.com/${REPO}/main/x-ui.sh"
+chmod +x /usr/bin/x-ui
+chmod +x ${XUI_FOLDER}/x-ui.sh
 
-# 9. Директории и логи
+# 6. Директории
 mkdir -p /etc/x-ui /var/log/x-ui
 
-# 10. Systemd service
+# 7. Systemd service
 log "Настраиваю systemd..."
-cat > /etc/systemd/system/x-ui.service << 'SVCEOF'
-[Unit]
-Description=AccessLicense Service
-After=network.target nss-lookup.target
 
-[Service]
-User=root
-WorkingDirectory=/usr/local/x-ui/
-ExecStart=/usr/local/x-ui/x-ui
-Restart=on-failure
-RestartSec=5s
-LimitNOFILE=1048576
-LimitNPROC=512
+# Пробуем из tar.gz, потом с GitHub
+SERVICE_INSTALLED=false
+for svc_file in "x-ui.service" "x-ui.service.debian" "x-ui.service.rhel"; do
+    if [ -f "${svc_file}" ]; then
+        cp -f "${svc_file}" ${XUI_SERVICE}/x-ui.service
+        SERVICE_INSTALLED=true
+        break
+    fi
+done
 
-[Install]
-WantedBy=multi-user.target
-SVCEOF
+if [ "$SERVICE_INSTALLED" = false ]; then
+    case "${release}" in
+        ubuntu | debian | armbian)
+            curl -4fLRo ${XUI_SERVICE}/x-ui.service "https://raw.githubusercontent.com/${REPO}/main/x-ui.service.debian" ;;
+        arch | manjaro | parch)
+            curl -4fLRo ${XUI_SERVICE}/x-ui.service "https://raw.githubusercontent.com/${REPO}/main/x-ui.service.arch" ;;
+        *)
+            curl -4fLRo ${XUI_SERVICE}/x-ui.service "https://raw.githubusercontent.com/${REPO}/main/x-ui.service.rhel" ;;
+    esac
+fi
 
+chown root:root ${XUI_SERVICE}/x-ui.service
+chmod 644 ${XUI_SERVICE}/x-ui.service
 systemctl daemon-reload
 systemctl enable x-ui >/dev/null 2>&1
 
-# 11. Первый запуск — создание БД
-log "Первый запуск для инициализации БД..."
+# 8. Первый запуск — инициализация БД
+log "Инициализирую БД..."
 cd ${XUI_FOLDER}
 timeout 15 ./x-ui 2>/dev/null || true
 sleep 2
 
-# Проверяем что БД создалась
 if [ ! -f "${DB_PATH}" ]; then
-    err "БД не создалась! Проверь логи: ${XUI_FOLDER}"
+    err "БД не создалась! Проверь логи: journalctl -u x-ui -n 50"
 fi
 log "БД создана: $(ls -lh ${DB_PATH} | awk '{print $5}')"
 
-# 12. Настраиваем панель
+# 9. Миграция БД
+${XUI_FOLDER}/x-ui migrate 2>/dev/null || true
+
+# 10. Настраиваем панель через x-ui CLI + sqlite3
 log "Настраиваю панель..."
 
-# Пароль — bcrypt через python3
-HASHED_PASS=$(python3 -c "
-try:
-    import bcrypt
-    print(bcrypt.hashpw(b'${PANEL_PASS}', bcrypt.gensalt()).decode())
-except ImportError:
-    print('${PANEL_PASS}')
-" 2>/dev/null || echo "${PANEL_PASS}")
+# Через встроенный CLI
+${XUI_FOLDER}/x-ui setting -username "${PANEL_USER}" -password "${PANEL_PASS}" -port "${PANEL_PORT}" -webBasePath "${PANEL_PATH}" 2>/dev/null || true
 
-sqlite3 "${DB_PATH}" << SQLEOF
--- Логин/пароль
-UPDATE users SET username='${PANEL_USER}', password='${HASHED_PASS}' WHERE id=1;
-
--- Порт панели (скрытый)
-INSERT OR REPLACE INTO settings (id, key, value) VALUES
-  ((SELECT id FROM settings WHERE key='webPort'), 'webPort', '${PANEL_PORT}');
-INSERT OR REPLACE INTO settings (id, key, value) VALUES
-  ((SELECT id FROM settings WHERE key='webBasePath'), 'webBasePath', '${PANEL_PATH}');
-
+# Дополнительные настройки через sqlite3
+sqlite3 "${DB_PATH}" << 'SQLEOF'
 -- Подписки
 INSERT OR REPLACE INTO settings (id, key, value) VALUES
-  ((SELECT id FROM settings WHERE key='subPort'), 'subPort', '${SUB_PORT}');
+  ((SELECT id FROM settings WHERE key='subPort'), 'subPort', '9444');
 INSERT OR REPLACE INTO settings (id, key, value) VALUES
-  ((SELECT id FROM settings WHERE key='subPath'), 'subPath', '${SUB_PATH}');
+  ((SELECT id FROM settings WHERE key='subPath'), 'subPath', '/feed/');
 INSERT OR REPLACE INTO settings (id, key, value) VALUES
-  ((SELECT id FROM settings WHERE key='subJsonPath'), 'subJsonPath', '${SUB_JSON_PATH}');
+  ((SELECT id FROM settings WHERE key='subJsonPath'), 'subJsonPath', '/config/');
 INSERT OR REPLACE INTO settings (id, key, value) VALUES
   ((SELECT id FROM settings WHERE key='subEnable'), 'subEnable', 'true');
 INSERT OR REPLACE INTO settings (id, key, value) VALUES
@@ -232,12 +228,8 @@ SQLEOF
 
 log "Панель настроена"
 
-# 13. Nginx — камуфляж (сервер выглядит как обычный сайт)
+# 11. Nginx — камуфляж
 log "Настраиваю nginx-камуфляж..."
-if command -v apt-get &>/dev/null; then
-    apt-get install -y -qq nginx >/dev/null 2>&1
-fi
-
 if command -v nginx &>/dev/null; then
     cat > /etc/nginx/sites-available/camouflage << NGXEOF
 server {
@@ -262,28 +254,28 @@ server {
 }
 NGXEOF
 
-    rm -f /etc/nginx/sites-enabled/default
+    rm -f /etc/nginx/sites-enabled/default 2>/dev/null
     ln -sf /etc/nginx/sites-available/camouflage /etc/nginx/sites-enabled/
     nginx -t >/dev/null 2>&1 && systemctl restart nginx
-    log "Nginx-камуфляж активен (порт 80 → проксирует google.com)"
+    log "Nginx-камуфляж активен (порт 80 → google.com)"
 fi
 
-# 14. Firewall
+# 12. Firewall
 log "Настраиваю firewall..."
 if command -v ufw &>/dev/null; then
     ufw --force reset >/dev/null 2>&1
     ufw default deny incoming >/dev/null 2>&1
     ufw default allow outgoing >/dev/null 2>&1
     ufw allow 22/tcp >/dev/null 2>&1
-    ufw allow 80/tcp >/dev/null 2>&1       # nginx камуфляж
-    ufw allow 443/tcp >/dev/null 2>&1      # Reality inbound
+    ufw allow 80/tcp >/dev/null 2>&1
+    ufw allow 443/tcp >/dev/null 2>&1
     ufw allow ${PANEL_PORT}/tcp >/dev/null 2>&1
     ufw allow ${SUB_PORT}/tcp >/dev/null 2>&1
     ufw --force enable >/dev/null 2>&1
     log "UFW: $(ufw status | grep -c ALLOW) правил"
 fi
 
-# 15. Sysctl — производительность + anti-fingerprint
+# 13. Sysctl — BBR + производительность
 log "Оптимизирую сетевой стек..."
 cat > /etc/sysctl.d/99-accesslicense.conf << 'SYSEOF'
 # === BBR Congestion Control ===
@@ -330,10 +322,12 @@ net.ipv4.conf.default.accept_source_route = 0
 net.ipv6.conf.all.disable_ipv6 = 0
 SYSEOF
 sysctl -p /etc/sysctl.d/99-accesslicense.conf >/dev/null 2>&1
-log "Sysctl оптимизирован (BBR + буферы + anti-fingerprint)"
+log "BBR + оптимизация применены"
 
-# 16. Fail2ban для x-ui
+# 14. Fail2ban для x-ui
 log "Настраиваю Fail2ban..."
+mkdir -p /etc/fail2ban/filter.d /etc/fail2ban/jail.d
+
 cat > /etc/fail2ban/filter.d/x-ui-iplimit.conf << 'F2BEOF'
 [Definition]
 datepattern = ^%%Y/%%m/%%d %%H:%%M:%%S
@@ -354,14 +348,14 @@ F2BJEOF
 
 systemctl restart fail2ban 2>/dev/null || true
 
-# 17. Запускаем
+# 15. Запускаем
 log "Запускаю AccessLicense..."
 systemctl start x-ui
 sleep 3
 
-# 18. Проверка
+# 16. Проверка
 if systemctl is-active --quiet x-ui; then
-    XRAY_VER_ACTUAL=$(${XUI_FOLDER}/bin/xray-linux-${PLATFORM} -version 2>/dev/null | head -1 | awk '{print $2}' || echo "${XRAY_VERSION}")
+    XRAY_VER=$(${XUI_FOLDER}/bin/xray-linux-${PLATFORM} -version 2>/dev/null | head -1 | awk '{print $2}' || echo "n/a")
 
     echo ""
     log "============================================"
@@ -369,8 +363,9 @@ if systemctl is-active --quiet x-ui; then
     log "============================================"
     echo ""
     info "  Server:  ${SERVER_IP}"
-    info "  Go:      $(go version 2>/dev/null | awk '{print $3}')"
-    info "  Xray:    ${XRAY_VER_ACTUAL}"
+    info "  Arch:    ${PLATFORM}"
+    info "  Version: ${TAG}"
+    info "  Xray:    ${XRAY_VER}"
     echo ""
     log "  Панель:  http://${SERVER_IP}:${PANEL_PORT}${PANEL_PATH}"
     log "  Логин:   ${PANEL_USER}"
@@ -383,21 +378,21 @@ if systemctl is-active --quiet x-ui; then
     warn "  Nginx:   порт 80 → google.com (камуфляж)"
     warn "  Reality: используй порт 443 для inbound"
     echo ""
+    log "  Команда x-ui — полное меню управления"
+    log "  SSL:  x-ui → пункт 16 (SSL Certificate Management)"
+    echo ""
     log "  Настройка VLESS+Reality:"
     log "    1. Панель → Inbounds → Add"
-    log "    2. Protocol: VLESS"
-    log "    3. Port: 443"
-    log "    4. Transport: TCP"
-    log "    5. Security: Reality"
-    log "    6. Target: www.google.com:443"
-    log "    7. SNI: www.google.com"
-    log "    8. uTLS: chrome_auto"
-    log "    9. Client Flow: xtls-rprx-vision"
+    log "    2. Protocol: VLESS | Port: 443"
+    log "    3. Transport: TCP | Security: Reality"
+    log "    4. Target: www.google.com:443"
+    log "    5. SNI: www.google.com | uTLS: chrome_auto"
+    log "    6. Client Flow: xtls-rprx-vision"
     log "============================================"
 else
     err "Панель не запустилась! Проверь: journalctl -u x-ui -n 50"
 fi
 
-# Чистим за собой
+# Чистим
 cd /
 rm -rf /tmp/AccessLicense
