@@ -16,6 +16,7 @@ const REALITY_TARGETS = [
     { target: 'storage.yandexcloud.net:443', sni: 'storage.yandexcloud.net' },
     { target: 'gosuslugi.ru:443', sni: 'gosuslugi.ru' },
     { target: 'esia.gosuslugi.ru:443', sni: 'esia.gosuslugi.ru' },
+    { target: 'web.max.ru:443', sni: 'web.max.ru' },
     // Cloud & CDN providers (extremely high traffic, hard to block)
     { target: 'www.microsoft.com:443', sni: 'www.microsoft.com' },
     { target: 'www.google.com:443', sni: 'www.google.com' },

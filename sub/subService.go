@@ -1154,6 +1154,16 @@ func generateSpiderXForDest(dest string) string {
 		}
 		return paths[random.Num(len(paths))]
 
+	case strings.HasSuffix(host, "max.ru"):
+		paths := []string{
+			"/personal/",
+			"/services/",
+			"/api/v1/account",
+			"/tariffs/",
+			"/support/",
+		}
+		return paths[random.Num(len(paths))]
+
 	default:
 		return generateRealisticSpiderX()
 	}
