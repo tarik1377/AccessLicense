@@ -77,13 +77,13 @@ type ClientDevice struct {
 	Id              int    `json:"id" gorm:"primaryKey;autoIncrement"`
 	ClientEmail     string `json:"clientEmail" gorm:"index:idx_client_device,unique,priority:1"`
 	DeviceId        string `json:"deviceId" gorm:"index:idx_client_device,unique,priority:2"` // SHA-256 fingerprint
-	Platform        string `json:"platform"`                                                   // OS/platform (Android, iOS, Windows, Linux, macOS)
-	ClientApp       string `json:"clientApp"`                                                  // Client app name (V2RayNG, Happ, Streisand, etc.)
-	LastIP          string `json:"lastIp"`                                                     // Most recent IP address
-	FirstSeen       int64  `json:"firstSeen"`                                                  // First connection timestamp
-	LastSeen        int64  `json:"lastSeen"`                                                   // Last connection timestamp
-	ConnectionCount int64  `json:"connectionCount" gorm:"default:1"`                           // Total connections from this device
-	IsActive        bool   `json:"isActive" gorm:"default:true"`                               // Whether device is currently allowed
+	Platform        string `json:"platform"`                                                  // OS/platform (Android, iOS, Windows, Linux, macOS)
+	ClientApp       string `json:"clientApp"`                                                 // Client app name (V2RayNG, Happ, Streisand, etc.)
+	LastIP          string `json:"lastIp"`                                                    // Most recent IP address
+	FirstSeen       int64  `json:"firstSeen"`                                                 // First connection timestamp
+	LastSeen        int64  `json:"lastSeen"`                                                  // Last connection timestamp
+	ConnectionCount int64  `json:"connectionCount" gorm:"default:1"`                          // Total connections from this device
+	IsActive        bool   `json:"isActive" gorm:"default:true"`                              // Whether device is currently allowed
 }
 
 // HistoryOfSeeders tracks which database seeders have been executed to prevent re-running.

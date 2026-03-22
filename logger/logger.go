@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/tarik1377/AccessLicense/v2/config"
 	"github.com/op/go-logging"
+	"github.com/tarik1377/AccessLicense/v2/config"
 )
 
 const (
