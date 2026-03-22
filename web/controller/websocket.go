@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/mhsanaei/3x-ui/v2/logger"
-	"github.com/mhsanaei/3x-ui/v2/util/common"
-	"github.com/mhsanaei/3x-ui/v2/web/session"
-	"github.com/mhsanaei/3x-ui/v2/web/websocket"
+	"github.com/tarik1377/AccessLicense/v2/logger"
+	"github.com/tarik1377/AccessLicense/v2/util/common"
+	"github.com/tarik1377/AccessLicense/v2/web/session"
+	"github.com/tarik1377/AccessLicense/v2/web/websocket"
 
 	"github.com/gin-gonic/gin"
 	ws "github.com/gorilla/websocket"

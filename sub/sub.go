@@ -15,13 +15,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mhsanaei/3x-ui/v2/logger"
-	"github.com/mhsanaei/3x-ui/v2/util/common"
-	webpkg "github.com/mhsanaei/3x-ui/v2/web"
-	"github.com/mhsanaei/3x-ui/v2/web/locale"
-	"github.com/mhsanaei/3x-ui/v2/web/middleware"
-	"github.com/mhsanaei/3x-ui/v2/web/network"
-	"github.com/mhsanaei/3x-ui/v2/web/service"
+	"github.com/tarik1377/AccessLicense/v2/logger"
+	"github.com/tarik1377/AccessLicense/v2/util/common"
+	webpkg "github.com/tarik1377/AccessLicense/v2/web"
+	"github.com/tarik1377/AccessLicense/v2/web/locale"
+	"github.com/tarik1377/AccessLicense/v2/web/middleware"
+	"github.com/tarik1377/AccessLicense/v2/web/network"
+	"github.com/tarik1377/AccessLicense/v2/web/service"
 
 	"github.com/gin-gonic/gin"
 )
