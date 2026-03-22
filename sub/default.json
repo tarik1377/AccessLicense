@@ -58,14 +58,14 @@
         "domainStrategy": "AsIs",
         "fragment": {
           "packets": "tlshello",
-          "length": "50-100",
-          "interval": "10-15"
+          "length": "100-200",
+          "interval": "5-10"
         },
         "noises": [
           {
             "type": "rand",
-            "packet": "10-30",
-            "delay": "10-16"
+            "packet": "50-100",
+            "delay": "30-80"
           }
         ]
       }
@@ -79,8 +79,8 @@
         "noises": [
           {
             "type": "rand",
-            "packet": "10-30",
-            "delay": "10-16"
+            "packet": "50-100",
+            "delay": "30-80"
           }
         ]
       }
@@ -99,7 +99,7 @@
     "levels": {
       "8": {
         "connIdle": 300,
-        "downlinkOnly": 1,
+        "downlinkOnly": 5,
         "handshake": 4,
         "uplinkOnly": 1
       }

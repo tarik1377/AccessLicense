@@ -426,7 +426,8 @@ func (s *SubService) genVlessLink(inbound *model.Inbound, email string) string {
 		tlsSettings, _ := searchKey(tlsSetting, "settings")
 		if tlsSetting != nil {
 			if fpValue, ok := searchKey(tlsSettings, "fingerprint"); ok {
-				params["fp"], _ = fpValue.(string)
+				fp, _ := fpValue.(string)
+				params["fp"] = getFingerprint(fp)
 			}
 		}
 
@@ -453,7 +454,7 @@ func (s *SubService) genVlessLink(inbound *model.Inbound, email string) string {
 			}
 			if fpValue, ok := searchKey(realitySettings, "fingerprint"); ok {
 				if fp, ok := fpValue.(string); ok && len(fp) > 0 {
-					params["fp"] = fp
+					params["fp"] = getFingerprint(fp)
 				}
 			}
 			if pqvValue, ok := searchKey(realitySettings, "mldsa65Verify"); ok {
@@ -622,7 +623,8 @@ func (s *SubService) genTrojanLink(inbound *model.Inbound, email string) string 
 		tlsSettings, _ := searchKey(tlsSetting, "settings")
 		if tlsSetting != nil {
 			if fpValue, ok := searchKey(tlsSettings, "fingerprint"); ok {
-				params["fp"], _ = fpValue.(string)
+				fp, _ := fpValue.(string)
+				params["fp"] = getFingerprint(fp)
 			}
 		}
 	}
@@ -645,7 +647,7 @@ func (s *SubService) genTrojanLink(inbound *model.Inbound, email string) string 
 			}
 			if fpValue, ok := searchKey(realitySettings, "fingerprint"); ok {
 				if fp, ok := fpValue.(string); ok && len(fp) > 0 {
-					params["fp"] = fp
+					params["fp"] = getFingerprint(fp)
 				}
 			}
 			if pqvValue, ok := searchKey(realitySettings, "mldsa65Verify"); ok {
@@ -822,7 +824,8 @@ func (s *SubService) genShadowsocksLink(inbound *model.Inbound, email string) st
 		tlsSettings, _ := searchKey(tlsSetting, "settings")
 		if tlsSetting != nil {
 			if fpValue, ok := searchKey(tlsSettings, "fingerprint"); ok {
-				params["fp"], _ = fpValue.(string)
+				fp, _ := fpValue.(string)
+				params["fp"] = getFingerprint(fp)
 			}
 		}
 	}
@@ -968,6 +971,17 @@ func (s *SubService) genRemark(inbound *model.Inbound, email string, extra strin
 		}
 	}
 	return strings.Join(remark, separationChar)
+}
+
+// getFingerprint returns the fingerprint to use for link generation.
+// If fp is empty or "random", a random fingerprint is chosen from a predefined list.
+// Otherwise, the original fp value is returned as-is.
+func getFingerprint(fp string) string {
+	if fp == "" || fp == "random" {
+		fingerprints := []string{"chrome", "firefox", "safari", "edge", "ios", "android"}
+		return fingerprints[random.Num(len(fingerprints))]
+	}
+	return fp
 }
 
 // generateRealisticSpiderX creates browser-like URL paths for Reality SpiderX
