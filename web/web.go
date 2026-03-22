@@ -182,6 +182,15 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 
 	engine := gin.Default()
 
+	// Security headers middleware — applied before all other middleware
+	engine.Use(func(c *gin.Context) {
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("X-Frame-Options", "SAMEORIGIN")
+		c.Header("X-XSS-Protection", "1; mode=block")
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+		c.Next()
+	})
+
 	webDomain, err := s.settingService.GetWebDomain()
 	if err != nil {
 		return nil, err

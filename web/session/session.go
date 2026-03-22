@@ -28,6 +28,7 @@ func SetLoginUser(c *gin.Context, user *model.User) {
 		return
 	}
 	s := sessions.Default(c)
+	user.Password = ""
 	s.Set(loginUserKey, *user)
 }
 
@@ -35,8 +36,12 @@ func SetLoginUser(c *gin.Context, user *model.User) {
 // This controls how long the session remains valid before requiring re-authentication.
 func SetMaxAge(c *gin.Context, maxAge int) {
 	s := sessions.Default(c)
+	// TODO: Set Secure: true when the panel is served over HTTPS (certFile/keyFile configured).
+	// Currently left as false to avoid breaking HTTP-only deployments, since session.go
+	// does not have access to the TLS configuration at this layer.
 	s.Options(sessions.Options{
 		Path:     defaultPath,
+		Secure:   false,
 		MaxAge:   maxAge,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,

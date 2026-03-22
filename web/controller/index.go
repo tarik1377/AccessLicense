@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"sync"
 	"text/template"
 	"time"
 
@@ -13,6 +14,13 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
+
+var loginAttempts sync.Map // key: IP string, value: *loginAttempt
+
+type loginAttempt struct {
+	count    int
+	lastTime time.Time
+}
 
 // LoginForm represents the login request structure.
 type LoginForm struct {
@@ -72,15 +80,39 @@ func (a *IndexController) login(c *gin.Context) {
 		return
 	}
 
+	// Rate limiting by IP
+	ip := getRemoteIp(c)
+	now := time.Now()
+	if val, ok := loginAttempts.Load(ip); ok {
+		attempt := val.(*loginAttempt)
+		if now.Sub(attempt.lastTime) > 5*time.Minute {
+			attempt.count = 0
+			attempt.lastTime = now
+		}
+		if attempt.count > 5 {
+			logger.Warningf("Too many login attempts from IP: %s", ip)
+			c.JSON(http.StatusTooManyRequests, gin.H{"success": false, "msg": "Too many login attempts, try again later"})
+			return
+		}
+	}
+
 	user, checkErr := a.userService.CheckUser(form.Username, form.Password, form.TwoFactorCode)
 	timeStr := time.Now().Format("2006-01-02 15:04:05")
 	safeUser := template.HTMLEscapeString(form.Username)
-	safePass := template.HTMLEscapeString(form.Password)
 
 	if user == nil {
-		logger.Warningf("wrong username: \"%s\", password: \"%s\", IP: \"%s\"", safeUser, safePass, getRemoteIp(c))
+		// Increment failed login attempt counter
+		if val, ok := loginAttempts.Load(ip); ok {
+			attempt := val.(*loginAttempt)
+			attempt.count++
+			attempt.lastTime = now
+		} else {
+			loginAttempts.Store(ip, &loginAttempt{count: 1, lastTime: now})
+		}
 
-		notifyPass := safePass
+		logger.Warningf("wrong username: \"%s\", IP: \"%s\"", safeUser, getRemoteIp(c))
+
+		notifyPass := "***"
 
 		if checkErr != nil && checkErr.Error() == "invalid 2fa code" {
 			translatedError := a.tgbot.I18nBot("tgbot.messages.2faFailed")
@@ -91,6 +123,9 @@ func (a *IndexController) login(c *gin.Context) {
 		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.login.toasts.wrongUsernameOrPassword"))
 		return
 	}
+
+	// Clear rate limit counter on successful login
+	loginAttempts.Delete(ip)
 
 	logger.Infof("%s logged in successfully, Ip Address: %s\n", safeUser, getRemoteIp(c))
 	a.tgbot.UserLoginNotify(safeUser, ``, getRemoteIp(c), timeStr, 1)

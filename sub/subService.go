@@ -22,10 +22,8 @@ import (
 
 // SubService provides business logic for generating subscription links and managing subscription data.
 type SubService struct {
-	address        string
 	showInfo       bool
 	remarkModel    string
-	datepicker     string
 	inboundService service.InboundService
 	settingService service.SettingService
 }
@@ -40,7 +38,7 @@ func NewSubService(showInfo bool, remarkModel string) *SubService {
 
 // GetSubs retrieves subscription links for a given subscription ID and host.
 func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.ClientTraffic, error) {
-	s.address = host
+	address := host
 	var result []string
 	var traffic xray.ClientTraffic
 	var lastOnline int64
@@ -54,10 +52,7 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 		return nil, 0, traffic, common.NewError("No inbounds found with ", subId)
 	}
 
-	s.datepicker, err = s.settingService.GetDatepicker()
-	if err != nil {
-		s.datepicker = "gregorian"
-	}
+	// datepicker is no longer needed in GetSubs; fetched in BuildPageData instead
 	for _, inbound := range inbounds {
 		clients, err := s.inboundService.GetClients(inbound)
 		if err != nil {
@@ -76,7 +71,7 @@ func (s *SubService) GetSubs(subId string, host string) ([]string, int64, xray.C
 		}
 		for _, client := range clients {
 			if client.Enable && client.SubID == subId {
-				link := s.getLink(inbound, client.Email)
+				link := s.getLink(inbound, client.Email, address)
 				result = append(result, link)
 				ct := s.getClientTraffics(inbound.ClientStats, client.Email)
 				clientTraffics = append(clientTraffics, ct)
@@ -161,27 +156,27 @@ func (s *SubService) getFallbackMaster(dest string, streamSettings string) (stri
 	return inbound.Listen, inbound.Port, string(modifiedStream), nil
 }
 
-func (s *SubService) getLink(inbound *model.Inbound, email string) string {
+func (s *SubService) getLink(inbound *model.Inbound, email string, address string) string {
 	switch inbound.Protocol {
 	case "vmess":
-		return s.genVmessLink(inbound, email)
+		return s.genVmessLink(inbound, email, address)
 	case "vless":
-		return s.genVlessLink(inbound, email)
+		return s.genVlessLink(inbound, email, address)
 	case "trojan":
-		return s.genTrojanLink(inbound, email)
+		return s.genTrojanLink(inbound, email, address)
 	case "shadowsocks":
-		return s.genShadowsocksLink(inbound, email)
+		return s.genShadowsocksLink(inbound, email, address)
 	}
 	return ""
 }
 
-func (s *SubService) genVmessLink(inbound *model.Inbound, email string) string {
+func (s *SubService) genVmessLink(inbound *model.Inbound, email string, defaultAddress string) string {
 	if inbound.Protocol != model.VMESS {
 		return ""
 	}
 	var address string
 	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
-		address = s.address
+		address = defaultAddress
 	} else {
 		address = inbound.Listen
 	}
@@ -319,10 +314,10 @@ func (s *SubService) genVmessLink(inbound *model.Inbound, email string) string {
 	return "vmess://" + base64.StdEncoding.EncodeToString(jsonStr)
 }
 
-func (s *SubService) genVlessLink(inbound *model.Inbound, email string) string {
+func (s *SubService) genVlessLink(inbound *model.Inbound, email string, defaultAddress string) string {
 	var address string
 	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
-		address = s.address
+		address = defaultAddress
 	} else {
 		address = inbound.Listen
 	}

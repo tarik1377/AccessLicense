@@ -139,9 +139,9 @@ func (s *SubJsonService) GetJson(subId string, host string) (string, string, err
 	// Combile outbounds
 	var finalJson []byte
 	if len(configArray) == 1 {
-		finalJson, _ = json.MarshalIndent(configArray[0], "", "  ")
+		finalJson, _ = json.Marshal(configArray[0])
 	} else {
-		finalJson, _ = json.MarshalIndent(configArray, "", "  ")
+		finalJson, _ = json.Marshal(configArray)
 	}
 
 	header = fmt.Sprintf("upload=%d; download=%d; total=%d; expire=%d", traffic.Up, traffic.Down, traffic.Total, traffic.ExpiryTime/1000)
@@ -183,7 +183,7 @@ func (s *SubJsonService) getConfig(inbound *model.Inbound, client model.Client, 
 				delete(newStream, "tlsSettings")
 			}
 		}
-		streamSettings, _ := json.MarshalIndent(newStream, "", "  ")
+		streamSettings, _ := json.Marshal(newStream)
 
 		var newOutbounds []json_util.RawMessage
 
@@ -203,7 +203,7 @@ func (s *SubJsonService) getConfig(inbound *model.Inbound, client model.Client, 
 		newConfigJson["outbounds"] = newOutbounds
 		newConfigJson["remarks"] = s.SubService.genRemark(inbound, client.Email, extPrxy["remark"].(string))
 
-		newConfig, _ := json.MarshalIndent(newConfigJson, "", "  ")
+		newConfig, _ := json.Marshal(newConfigJson)
 		newJsonArray = append(newJsonArray, newConfig)
 	}
 
@@ -326,7 +326,7 @@ func (s *SubJsonService) genVnext(inbound *model.Inbound, streamSettings json_ut
 		"vnext": vnextData,
 	}
 
-	result, _ := json.MarshalIndent(outbound, "", "  ")
+	result, _ := json.Marshal(outbound)
 	return result
 }
 
@@ -352,7 +352,7 @@ func (s *SubJsonService) genVless(inbound *model.Inbound, streamSettings json_ut
 	}
 
 	outbound.Settings = settings
-	result, _ := json.MarshalIndent(outbound, "", "  ")
+	result, _ := json.Marshal(outbound)
 	return result
 }
 
@@ -389,7 +389,7 @@ func (s *SubJsonService) genServer(inbound *model.Inbound, streamSettings json_u
 		"servers": serverData,
 	}
 
-	result, _ := json.MarshalIndent(outbound, "", "  ")
+	result, _ := json.Marshal(outbound)
 	return result
 }
 

@@ -33,7 +33,7 @@ type User struct {
 // Inbound represents an Xray inbound configuration with traffic statistics and settings.
 type Inbound struct {
 	Id                   int                  `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`                                                    // Unique identifier
-	UserId               int                  `json:"-"`                                                                                               // Associated user ID
+	UserId               int                  `json:"-" gorm:"index"`                                                                                  // Associated user ID
 	Up                   int64                `json:"up" form:"up"`                                                                                    // Upload traffic in bytes
 	Down                 int64                `json:"down" form:"down"`                                                                                // Download traffic in bytes
 	Total                int64                `json:"total" form:"total"`                                                                              // Total traffic limit in bytes
@@ -47,7 +47,7 @@ type Inbound struct {
 
 	// Xray configuration fields
 	Listen         string   `json:"listen" form:"listen"`
-	Port           int      `json:"port" form:"port"`
+	Port           int      `json:"port" form:"port" gorm:"index"`
 	Protocol       Protocol `json:"protocol" form:"protocol"`
 	Settings       string   `json:"settings" form:"settings"`
 	StreamSettings string   `json:"streamSettings" form:"streamSettings"`

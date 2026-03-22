@@ -8,6 +8,11 @@ import (
 	"github.com/tarik1377/AccessLicense/v2/logger"
 )
 
+var (
+	crashRegex   = regexp.MustCompile(`(?i)(panic|exception|stack trace|fatal error)`)
+	logLineRegex = regexp.MustCompile(`^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\.\d{6}) \[([^\]]+)\] (.+)$`)
+)
+
 // NewLogWriter returns a new LogWriter for processing Xray log output.
 func NewLogWriter() *LogWriter {
 	return &LogWriter{}
@@ -20,8 +25,6 @@ type LogWriter struct {
 
 // Write processes and filters log output from the Xray process, handling crash detection and message filtering.
 func (lw *LogWriter) Write(m []byte) (n int, err error) {
-	crashRegex := regexp.MustCompile(`(?i)(panic|exception|stack trace|fatal error)`)
-
 	// Convert the data to a string
 	message := strings.TrimSpace(string(m))
 	msgLowerAll := strings.ToLower(message)
@@ -42,7 +45,7 @@ func (lw *LogWriter) Write(m []byte) (n int, err error) {
 		return len(m), nil
 	}
 
-	regex := regexp.MustCompile(`^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\.\d{6}) \[([^\]]+)\] (.+)$`)
+	regex := logLineRegex
 	messages := strings.SplitSeq(message, "\n")
 
 	for msg := range messages {

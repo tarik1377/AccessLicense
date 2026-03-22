@@ -5,11 +5,21 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/tarik1377/AccessLicense/v2/config"
 
 	"github.com/gin-gonic/gin"
 )
+
+var subCache sync.Map // key: "subId:host" or "json:subId:host", value: *cacheEntry
+
+type cacheEntry struct {
+	data     string
+	header   string
+	expireAt time.Time
+}
 
 // SUBController handles HTTP requests for subscription links and JSON configurations.
 type SUBController struct {
@@ -86,6 +96,27 @@ func (a *SUBController) initRouter(g *gin.RouterGroup) {
 func (a *SUBController) subs(c *gin.Context) {
 	subId := c.Param("subid")
 	scheme, host, hostWithPort, hostHeader := a.subService.ResolveRequest(c)
+
+	// Check cache for non-HTML requests
+	accept := c.GetHeader("Accept")
+	isHTML := strings.Contains(strings.ToLower(accept), "text/html") || c.Query("html") == "1" || strings.EqualFold(c.Query("view"), "html")
+	if !isHTML {
+		cacheKey := subId + ":" + host
+		if entry, ok := subCache.Load(cacheKey); ok {
+			ce := entry.(*cacheEntry)
+			if time.Now().Before(ce.expireAt) {
+				profileUrl := a.subProfileUrl
+				if profileUrl == "" {
+					profileUrl = fmt.Sprintf("%s://%s%s", scheme, hostWithPort, c.Request.RequestURI)
+				}
+				a.ApplyCommonHeaders(c, ce.header, a.updateInterval, a.subTitle, a.subSupportUrl, profileUrl, a.subAnnounce, a.subEnableRouting, a.subRoutingRules)
+				c.String(200, ce.data)
+				return
+			}
+			subCache.Delete(cacheKey)
+		}
+	}
+
 	subs, lastOnline, traffic, err := a.subService.GetSubs(subId, host)
 	if err != nil || len(subs) == 0 {
 		c.String(400, "Error!")
@@ -96,8 +127,7 @@ func (a *SUBController) subs(c *gin.Context) {
 		}
 
 		// If the request expects HTML (e.g., browser) or explicitly asked (?html=1 or ?view=html), render the info page here
-		accept := c.GetHeader("Accept")
-		if strings.Contains(strings.ToLower(accept), "text/html") || c.Query("html") == "1" || strings.EqualFold(c.Query("view"), "html") {
+		if isHTML {
 			// Build page data in service
 			subURL, subJsonURL := a.subService.BuildURLs(scheme, hostWithPort, a.subPath, a.subJsonPath, subId)
 			if !a.jsonEnabled {
@@ -149,11 +179,20 @@ func (a *SUBController) subs(c *gin.Context) {
 		}
 		a.ApplyCommonHeaders(c, header, a.updateInterval, a.subTitle, a.subSupportUrl, profileUrl, a.subAnnounce, a.subEnableRouting, a.subRoutingRules)
 
+		// Store in cache
+		var responseData string
 		if a.subEncrypt {
-			c.String(200, base64.StdEncoding.EncodeToString([]byte(result)))
+			responseData = base64.StdEncoding.EncodeToString([]byte(result))
 		} else {
-			c.String(200, result)
+			responseData = result
 		}
+		subCache.Store(subId+":"+host, &cacheEntry{
+			data:     responseData,
+			header:   header,
+			expireAt: time.Now().Add(60 * time.Second),
+		})
+
+		c.String(200, responseData)
 	}
 }
 
@@ -161,10 +200,34 @@ func (a *SUBController) subs(c *gin.Context) {
 func (a *SUBController) subJsons(c *gin.Context) {
 	subId := c.Param("subid")
 	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
+
+	// Check cache
+	cacheKey := "json:" + subId + ":" + host
+	if entry, ok := subCache.Load(cacheKey); ok {
+		ce := entry.(*cacheEntry)
+		if time.Now().Before(ce.expireAt) {
+			profileUrl := a.subProfileUrl
+			if profileUrl == "" {
+				profileUrl = fmt.Sprintf("%s://%s%s", scheme, hostWithPort, c.Request.RequestURI)
+			}
+			a.ApplyCommonHeaders(c, ce.header, a.updateInterval, a.subTitle, a.subSupportUrl, profileUrl, a.subAnnounce, a.subEnableRouting, a.subRoutingRules)
+			c.String(200, ce.data)
+			return
+		}
+		subCache.Delete(cacheKey)
+	}
+
 	jsonSub, header, err := a.subJsonService.GetJson(subId, host)
 	if err != nil || len(jsonSub) == 0 {
 		c.String(400, "Error!")
 	} else {
+		// Store in cache
+		subCache.Store(cacheKey, &cacheEntry{
+			data:     jsonSub,
+			header:   header,
+			expireAt: time.Now().Add(60 * time.Second),
+		})
+
 		// Add headers
 		profileUrl := a.subProfileUrl
 		if profileUrl == "" {
