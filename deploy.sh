@@ -4,22 +4,48 @@
 # AccessLicense Deploy — быстрая установка из GitHub Releases
 # Без Go, без сборки — скачивает готовый бинарник за секунды
 # + настройка панели, nginx, firewall, sysctl, VLESS+Reality
-# Использование: bash deploy.sh
+# Использование:
+#   bash deploy.sh
+#   DOMAIN=tech-blog.ru PANEL_USER=admin bash deploy.sh
+#   bash deploy.sh --domain tech-blog.ru --user admin --pass MyS3cret
 #=================================================================
 
 set -e
 
+# ===================== ПАРСИНГ АРГУМЕНТОВ =====================
+# Параметры можно передать через ENV или аргументы командной строки.
+# Аргументы имеют приоритет над ENV, ENV — над дефолтами.
+# Примеры:
+#   DOMAIN=tech-blog.ru PANEL_USER=admin bash deploy.sh
+#   bash deploy.sh --domain tech-blog.ru --user admin
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --domain)     CUSTOM_DOMAIN="$2"; shift 2 ;;
+        --user)       CUSTOM_USER="$2"; shift 2 ;;
+        --pass)       CUSTOM_PASS="$2"; shift 2 ;;
+        --panel-port) CUSTOM_PANEL_PORT="$2"; shift 2 ;;
+        --sub-port)   CUSTOM_SUB_PORT="$2"; shift 2 ;;
+        --node-name)  CUSTOM_NODE_NAME="$2"; shift 2 ;;
+        *) shift ;;
+    esac
+done
+# ==============================================================
+
 # ===================== КОНФИГУРАЦИЯ =====================
-PANEL_PORT=9443
-SUB_PORT=9444
-PANEL_USER="e.allahverdiev"
-PANEL_PASS='L@debaR2324!'
+# Приоритет: аргумент (--flag) > ENV переменная > дефолт
+PANEL_PORT=${CUSTOM_PANEL_PORT:-${PANEL_PORT_ENV:-9443}}
+SUB_PORT=${CUSTOM_SUB_PORT:-${SUB_PORT_ENV:-9444}}
+PANEL_USER=${CUSTOM_USER:-${PANEL_USER_ENV:-"admin"}}
+PANEL_PASS=${CUSTOM_PASS:-${PANEL_PASS_ENV:-$(openssl rand -base64 16)}}
 PANEL_PATH="/secretpanel/"
 SUB_PATH="/feed/"
 SUB_JSON_PATH="/config/"
 XUI_FOLDER="/usr/local/x-ui"
 DB_PATH="/etc/x-ui/x-ui.db"
 GITHUB_REPO="tarik1377/AccessLicense"
+NODE_NAME=${CUSTOM_NODE_NAME:-"node-$(hostname -s)"}
+DOMAIN=${CUSTOM_DOMAIN:-""}
 # ========================================================
 
 RED='\033[0;31m'
@@ -433,23 +459,33 @@ ROBOTSEOF
 </urlset>
 SITEMAPEOF
 
+    # --- sitemap.xml: подставляем домен если передан ---
+    if [ -n "$DOMAIN" ]; then
+        sed -i "s|http://localhost/|https://${DOMAIN}/|g" /var/www/cover-site/sitemap.xml
+    fi
+
     # --- nginx config: статический сайт вместо proxy_pass ---
-    cat > /etc/nginx/sites-available/camouflage << 'NGXEOF'
+    NGINX_SERVER_NAME="_"
+    if [ -n "$DOMAIN" ]; then
+        NGINX_SERVER_NAME="$DOMAIN"
+    fi
+
+    cat > /etc/nginx/sites-available/camouflage << NGXEOF
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
-    server_name _;
+    server_name ${NGINX_SERVER_NAME};
 
     root /var/www/cover-site;
     index index.html;
 
     # Реальный статический сайт
     location / {
-        try_files $uri $uri/ =404;
+        try_files \$uri \$uri/ =404;
     }
 
     # Кэширование статики
-    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2)$ {
+    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2)\$ {
         expires 30d;
         add_header Cache-Control "public, immutable";
     }
@@ -470,6 +506,21 @@ NGXEOF
     ln -sf /etc/nginx/sites-available/camouflage /etc/nginx/sites-enabled/
     nginx -t >/dev/null 2>&1 && systemctl restart nginx
     log "Nginx: порт 80 → статический сайт-прикрытие (CloudVantage)"
+
+    # --- Let's Encrypt: автоматический сертификат если передан домен ---
+    if [ -n "$DOMAIN" ]; then
+        log "Получаю SSL-сертификат Let's Encrypt для ${DOMAIN}..."
+        if command -v apt-get &>/dev/null; then
+            apt-get install -y certbot python3-certbot-nginx >/dev/null 2>&1
+        elif command -v dnf &>/dev/null; then
+            dnf install -y certbot python3-certbot-nginx >/dev/null 2>&1
+        elif command -v yum &>/dev/null; then
+            yum install -y certbot python3-certbot-nginx >/dev/null 2>&1
+        fi
+        certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --email "admin@${DOMAIN}" \
+            && log "SSL-сертификат получен для ${DOMAIN}" \
+            || warn "Не удалось получить SSL-сертификат. Проверь DNS A-запись для ${DOMAIN} → ${SERVER_IP}"
+    fi
 fi
 
 # 6. Firewall
@@ -601,24 +652,41 @@ esac
 if systemctl is-active --quiet x-ui; then
     XRAY_VER_ACTUAL=$(${XUI_FOLDER}/bin/xray-linux-${PLATFORM} -version 2>/dev/null | head -1 | awk '{print $2}' || echo "latest")
 
+    # Определяем адрес для вывода (домен или IP)
+    if [ -n "$DOMAIN" ]; then
+        DISPLAY_HOST="${DOMAIN}"
+        PANEL_PROTO="https"
+    else
+        DISPLAY_HOST="${SERVER_IP}"
+        PANEL_PROTO="http"
+    fi
+
     echo ""
     log "============================================"
-    log "  УСТАНОВКА ЗАВЕРШЕНА!"
+    log "  ДАННЫЕ ДЛЯ ПОДКЛЮЧЕНИЯ (СОХРАНИ!)"
     log "============================================"
     echo ""
-    info "  Server:  ${SERVER_IP}"
-    info "  Xray:    ${XRAY_VER_ACTUAL}"
-    info "  Arch:    ${PLATFORM}"
+    info "  Server:    ${SERVER_IP}"
+    info "  Node:      ${NODE_NAME}"
+    if [ -n "$DOMAIN" ]; then
+    info "  Domain:    ${DOMAIN}"
+    fi
+    info "  Xray:      ${XRAY_VER_ACTUAL}"
+    info "  Arch:      ${PLATFORM}"
     echo ""
-    log "  Панель:  http://${SERVER_IP}:${PANEL_PORT}${PANEL_PATH}"
-    log "  Логин:   ${PANEL_USER}"
-    log "  Пароль:  ${PANEL_PASS}"
+    log "  Панель:    ${PANEL_PROTO}://${DISPLAY_HOST}:${PANEL_PORT}${PANEL_PATH}"
+    log "  Логин:     ${PANEL_USER}"
+    log "  Пароль:    ${PANEL_PASS}"
+    warn "  ↑ СОХРАНИ ПАРОЛЬ! Если он сгенерирован — повторно его не получить."
     echo ""
     log "  Подписки:"
-    log "    Links: http://${SERVER_IP}:${SUB_PORT}${SUB_PATH}<subId>"
-    log "    JSON:  http://${SERVER_IP}:${SUB_PORT}${SUB_JSON_PATH}<subId>"
+    log "    Links:   ${PANEL_PROTO}://${DISPLAY_HOST}:${SUB_PORT}${SUB_PATH}<subId>"
+    log "    JSON:    ${PANEL_PROTO}://${DISPLAY_HOST}:${SUB_PORT}${SUB_JSON_PATH}<subId>"
     echo ""
-    log "  Nginx:   порт 80 → статический сайт-прикрытие (CloudVantage)"
+    log "  Nginx:     порт 80 → статический сайт-прикрытие (CloudVantage)"
+    if [ -n "$DOMAIN" ]; then
+    log "  SSL:       Let's Encrypt (auto-renew)"
+    fi
     echo ""
     log "  ═══ VLESS+Reality (максимальная скорость) ═══"
     log "    1. Панель → Inbounds → Add Inbound"
