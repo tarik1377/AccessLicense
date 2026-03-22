@@ -176,10 +176,39 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 					delete(tlsSettings, "settings")
 				} else if ok2 {
 					delete(realitySettings, "settings")
+
+					// Harden Reality settings for anti-detection:
+					// 1. Force show=false to prevent information leakage
+					realitySettings["show"] = false
+					// 2. Ensure maxTimediff is set to reject stale/replayed handshakes
+					if maxTimediff, ok := realitySettings["maxTimediff"].(float64); !ok || maxTimediff == 0 {
+						realitySettings["maxTimediff"] = float64(5000) // 5 seconds max time difference
+					}
 				}
 			}
 
 			delete(stream, "externalProxy")
+
+			// Ensure optimized sockopt is present for anti-DPI evasion
+			// This applies BBR congestion control and MPTCP to reduce
+			// TCP stack fingerprinting on the server side
+			sockopt, hasSockopt := stream["sockopt"].(map[string]any)
+			if !hasSockopt {
+				sockopt = make(map[string]any)
+			}
+			// Set BBR if not explicitly configured
+			if _, ok := sockopt["tcpcongestion"]; !ok {
+				sockopt["tcpcongestion"] = "bbr"
+			}
+			// Enable MPTCP if not explicitly configured
+			if _, ok := sockopt["tcpMptcp"]; !ok {
+				sockopt["tcpMptcp"] = true
+			}
+			// Set keep-alive to match typical browser behavior
+			if _, ok := sockopt["tcpKeepAliveIdle"]; !ok {
+				sockopt["tcpKeepAliveIdle"] = 100
+			}
+			stream["sockopt"] = sockopt
 
 			newStream, err := json.MarshalIndent(stream, "", "  ")
 			if err != nil {

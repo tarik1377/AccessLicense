@@ -461,7 +461,7 @@ func (s *SubService) genVlessLink(inbound *model.Inbound, email string) string {
 					params["pqv"] = pqv
 				}
 			}
-			params["spx"] = "/" + random.Seq(15)
+			params["spx"] = generateRealisticSpiderX()
 		}
 
 		if streamNetwork == "tcp" && len(clients[clientIndex].Flow) > 0 {
@@ -653,7 +653,7 @@ func (s *SubService) genTrojanLink(inbound *model.Inbound, email string) string 
 					params["pqv"] = pqv
 				}
 			}
-			params["spx"] = "/" + random.Seq(15)
+			params["spx"] = generateRealisticSpiderX()
 		}
 
 		if streamNetwork == "tcp" && len(clients[clientIndex].Flow) > 0 {
@@ -968,6 +968,29 @@ func (s *SubService) genRemark(inbound *model.Inbound, email string, extra strin
 		}
 	}
 	return strings.Join(remark, separationChar)
+}
+
+// generateRealisticSpiderX creates browser-like URL paths for Reality SpiderX
+// to avoid DPI detection of static/predictable patterns
+func generateRealisticSpiderX() string {
+	paths := []string{
+		"/",
+		"/en",
+		"/en-us",
+		"/search?q=" + random.Seq(8),
+		"/products",
+		"/about",
+		"/support",
+		"/docs/" + random.Seq(6),
+		"/blog/" + random.Seq(10),
+		"/api/v1/" + random.Seq(8),
+		"/assets/css/main.css",
+		"/static/js/app." + random.Seq(8) + ".js",
+		"/images/" + random.Seq(12) + ".png",
+		"/cdn-cgi/trace",
+		"/?lang=en&ref=" + random.Seq(6),
+	}
+	return paths[random.Num(len(paths))]
 }
 
 func searchKey(data any, key string) (any, bool) {

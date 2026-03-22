@@ -32,7 +32,13 @@
       "settings": {
         "domainStrategy": "AsIs",
         "redirect": "",
-        "noises": []
+        "noises": [
+          {
+            "type": "rand",
+            "packet": "100-300",
+            "delay": "10-16"
+          }
+        ]
       }
     },
     {
