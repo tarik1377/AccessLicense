@@ -1103,6 +1103,56 @@ func generateSpiderXForDest(dest string) string {
 		}
 		return paths[random.Num(len(paths))]
 
+	case host == "yandex.ru" || host == "ya.ru":
+		paths := []string{
+			"/search?text=%D0%BF%D0%BE%D0%B3%D0%BE%D0%B4%D0%B0+%D0%BC%D0%BE%D1%81%D0%BA%D0%B2%D0%B0&lr=213&sid=" + sessionId,
+			"/images/search?text=%D0%BA%D0%BE%D1%82%D0%B8%D0%BA%D0%B8&t=" + timestamp,
+			"/weather/moscow",
+			"/news/",
+			"/maps/?ll=37.6173,55.7558&z=10&sid=" + sessionId,
+			"/market/product/" + fmt.Sprintf("%d", 10000+random.Num(90000)),
+			"/video/search?text=%D0%BA%D0%B0%D0%BA+%D0%B3%D0%BE%D1%82%D0%BE%D0%B2%D0%B8%D1%82%D1%8C",
+		}
+		return paths[random.Num(len(paths))]
+
+	case host == "vk.com":
+		paths := []string{
+			"/feed",
+			"/im",
+			"/video/playlist/-" + fmt.Sprintf("%d", 10000+random.Num(90000)) + "_1",
+			"/wall-" + fmt.Sprintf("%d_%d", 10000+random.Num(90000), 10000+random.Num(90000)),
+			"/away.php?to=https%3A%2F%2Fexample.com&t=" + timestamp,
+			"/sticker/1-" + fmt.Sprintf("%d", 10000+random.Num(90000)),
+		}
+		return paths[random.Num(len(paths))]
+
+	case host == "sberbank.ru" || strings.HasSuffix(host, ".sberbank.ru"):
+		paths := []string{
+			"/api/v1/account/info?sid=" + sessionId,
+			"/online/",
+			"/estore/",
+			"/sms/pbx/api/v2/config",
+		}
+		return paths[random.Num(len(paths))]
+
+	case host == "mail.ru" || strings.HasSuffix(host, ".mail.ru"):
+		paths := []string{
+			"/inbox/?t=" + timestamp,
+			"/api/v1/messages?sid=" + sessionId,
+			"/calendar/",
+			"/cloud/",
+		}
+		return paths[random.Num(len(paths))]
+
+	case host == "storage.yandexcloud.net" || strings.HasSuffix(host, ".storage.yandexcloud.net"):
+		bucket := random.Seq(8)
+		paths := []string{
+			"/" + bucket + "/data/export-2024.csv",
+			"/" + bucket + "/backup/db-dump.sql.gz",
+			"/" + bucket + "/logs/access.log",
+		}
+		return paths[random.Num(len(paths))]
+
 	default:
 		return generateRealisticSpiderX()
 	}

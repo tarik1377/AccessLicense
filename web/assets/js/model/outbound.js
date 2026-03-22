@@ -293,12 +293,12 @@ class xHTTPStreamSettings extends CommonClass {
         noGRPCHeader = false,
         scMinPostsIntervalMs = "30",
         xmux = {
-            maxConcurrency: "8-16",
+            maxConcurrency: "4-6",
             maxConnections: 0,
             cMaxReuseTimes: 0,
-            hMaxRequestTimes: "600-900",
-            hMaxReusableSecs: "1800-3000",
-            hKeepAlivePeriod: 0,
+            hMaxRequestTimes: "15-40",
+            hMaxReusableSecs: "30-120",
+            hKeepAlivePeriod: 45,
         },
     ) {
         super();

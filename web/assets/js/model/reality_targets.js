@@ -5,6 +5,17 @@
 // 3. Geographic diversity (different CDN endpoints)
 // 4. Long-lived TLS sessions (stable certificates)
 const REALITY_TARGETS = [
+    // Russian services (recommended for Russian clouds)
+    { target: 'yandex.ru:443', sni: 'yandex.ru' },
+    { target: 'ya.ru:443', sni: 'ya.ru' },
+    { target: 'vk.com:443', sni: 'vk.com' },
+    { target: 'sberbank.ru:443', sni: 'sberbank.ru' },
+    { target: 'online.sberbank.ru:443', sni: 'online.sberbank.ru' },
+    { target: 'mail.ru:443', sni: 'mail.ru' },
+    { target: 'e.mail.ru:443', sni: 'e.mail.ru' },
+    { target: 'storage.yandexcloud.net:443', sni: 'storage.yandexcloud.net' },
+    { target: 'gosuslugi.ru:443', sni: 'gosuslugi.ru' },
+    { target: 'esia.gosuslugi.ru:443', sni: 'esia.gosuslugi.ru' },
     // Cloud & CDN providers (extremely high traffic, hard to block)
     { target: 'www.microsoft.com:443', sni: 'www.microsoft.com' },
     { target: 'www.google.com:443', sni: 'www.google.com' },
