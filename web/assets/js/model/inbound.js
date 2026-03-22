@@ -50,11 +50,21 @@ const TLS_CIPHER_OPTION = {
 
 const UTLS_FINGERPRINT = {
     UTLS_CHROME: "chrome",
+    UTLS_CHROME_AUTO: "chrome_auto",
+    UTLS_CHROME_131: "chrome_131",
+    UTLS_CHROME_120: "chrome_120",
+    UTLS_CHROME_115: "chrome_115",
+    UTLS_CHROME_POST_QUANTUM: "chrome_pq",
     UTLS_FIREFOX: "firefox",
+    UTLS_FIREFOX_AUTO: "firefox_auto",
+    UTLS_FIREFOX_120: "firefox_120",
     UTLS_SAFARI: "safari",
+    UTLS_SAFARI_AUTO: "safari_auto",
     UTLS_IOS: "ios",
+    UTLS_IOS_AUTO: "ios_auto",
     UTLS_android: "android",
     UTLS_EDGE: "edge",
+    UTLS_EDGE_AUTO: "edge_auto",
     UTLS_360: "360",
     UTLS_QQ: "qq",
     UTLS_RANDOM: "random",
@@ -592,7 +602,7 @@ class xHTTPStreamSettings extends XrayCommonClass {
 class TlsStreamSettings extends XrayCommonClass {
     constructor(
         serverName = '',
-        minVersion = TLS_VERSION_OPTION.TLS12,
+        minVersion = TLS_VERSION_OPTION.TLS13,
         maxVersion = TLS_VERSION_OPTION.TLS13,
         cipherSuites = '',
         rejectUnknownSni = false,
@@ -738,7 +748,7 @@ TlsStreamSettings.Cert = class extends XrayCommonClass {
 
 TlsStreamSettings.Settings = class extends XrayCommonClass {
     constructor(
-        fingerprint = UTLS_FINGERPRINT.UTLS_CHROME,
+        fingerprint = UTLS_FINGERPRINT.UTLS_CHROME_AUTO,
         echConfigList = '',
     ) {
         super();
@@ -842,7 +852,7 @@ class RealityStreamSettings extends XrayCommonClass {
 RealityStreamSettings.Settings = class extends XrayCommonClass {
     constructor(
         publicKey = '',
-        fingerprint = UTLS_FINGERPRINT.UTLS_CHROME,
+        fingerprint = UTLS_FINGERPRINT.UTLS_CHROME_AUTO,
         serverName = '',
         spiderX = '/',
         mldsa65Verify = ''
@@ -880,17 +890,17 @@ class SockoptStreamSettings extends XrayCommonClass {
         tcpFastOpen = false,
         mark = 0,
         tproxy = "off",
-        tcpMptcp = false,
-        penetrate = false,
+        tcpMptcp = true,
+        penetrate = true,
         domainStrategy = DOMAIN_STRATEGY_OPTION.USE_IP,
-        tcpMaxSeg = 1440,
+        tcpMaxSeg = 0,
         dialerProxy = "",
         tcpKeepAliveInterval = 0,
         tcpKeepAliveIdle = 300,
         tcpUserTimeout = 10000,
         tcpcongestion = TCP_CONGESTION_OPTION.BBR,
         V6Only = false,
-        tcpWindowClamp = 600,
+        tcpWindowClamp = 0,
         interfaceName = "",
         trustedXForwardedFor = [],
     ) {
@@ -1974,7 +1984,7 @@ Inbound.VLESSSettings = class extends Inbound.Settings {
         encryption = "none",
         fallbacks = [],
         selectedAuth = undefined,
-        testseed = [900, 500, 900, 256],
+        testseed = null,
     ) {
         super(protocol);
         this.vlesses = vlesses;
@@ -1982,7 +1992,8 @@ Inbound.VLESSSettings = class extends Inbound.Settings {
         this.encryption = encryption;
         this.fallbacks = fallbacks;
         this.selectedAuth = selectedAuth;
-        this.testseed = testseed;
+        // Generate random testseed by default to avoid DPI fingerprinting
+        this.testseed = testseed || Inbound.VLESSSettings.generateRandomTestseed();
     }
 
     addFallback() {
@@ -1995,7 +2006,7 @@ Inbound.VLESSSettings = class extends Inbound.Settings {
 
     static fromJson(json = {}) {
         // Ensure testseed is always initialized as an array
-        let testseed = [900, 500, 900, 256];
+        let testseed = Inbound.VLESSSettings.generateRandomTestseed();
         if (json.testseed && Array.isArray(json.testseed) && json.testseed.length >= 4) {
             testseed = json.testseed;
         }
@@ -2042,6 +2053,21 @@ Inbound.VLESSSettings = class extends Inbound.Settings {
         return json;
     }
 
+    // Generate randomized testseed values to avoid DPI pattern matching
+    // Ranges chosen to maintain quality while being unpredictable:
+    // [0]: padding length range start (600-1200)
+    // [1]: padding variance (300-700)
+    // [2]: second padding range (600-1200)
+    // [3]: chunk size factor (128-512)
+    static generateRandomTestseed() {
+        const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+        return [
+            rand(600, 1200),
+            rand(300, 700),
+            rand(600, 1200),
+            rand(128, 512),
+        ];
+    }
 
 };
 

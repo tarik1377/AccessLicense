@@ -54,7 +54,15 @@
         </template>
         <a-textarea v-model.trim="inbound.stream.reality.shortIds"></a-textarea>
     </a-form-item>
-    <a-form-item label='SpiderX'>
+    <a-form-item>
+        <template slot="label">
+            <a-tooltip>
+                <template slot="title">
+                    <span>Random path for browsing simulation. Use realistic paths for better anti-detection.</span>
+                </template> SpiderX <a-icon @click="inbound.stream.reality.settings.spiderX = '/?q=' + RandomUtil.randomSeq(12, { hasUppercase: false })"
+                    type="sync"></a-icon>
+            </a-tooltip>
+        </template>
         <a-input v-model.trim="inbound.stream.reality.settings.spiderX"></a-input>
     </a-form-item>
     <a-form-item label='{{ i18n "pages.inbounds.publicKey" }}'>

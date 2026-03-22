@@ -114,9 +114,12 @@ class RandomUtil {
     }
 
     static randomShortIds() {
-        const lengths = [2, 4, 6, 8, 10, 12, 14, 16].sort(() => Math.random() - 0.5);
-
-        return lengths.map(len => this.randomSeq(len, { type: "hex" })).join(',');
+        const allLengths = [2, 4, 6, 8, 10, 12, 14, 16];
+        // Pick a random subset (3-8 IDs) for less predictable patterns
+        const count = 3 + Math.floor(Math.random() * 6);
+        const shuffled = allLengths.slice().sort(() => Math.random() - 0.5);
+        const selected = shuffled.slice(0, Math.min(count, shuffled.length));
+        return selected.map(len => this.randomSeq(len, { type: "hex" })).join(',');
     }
 
     static randomLowerAndNum(len) {

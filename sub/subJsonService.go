@@ -223,7 +223,12 @@ func (s *SubJsonService) streamData(stream string) map[string]any {
 	delete(streamSettings, "sockopt")
 
 	if s.fragment != "" {
-		streamSettings["sockopt"] = json_util.RawMessage(`{"dialerProxy": "fragment", "tcpKeepAliveIdle": 100, "tcpMptcp": true, "penetrate": true}`)
+		streamSettings["sockopt"] = json_util.RawMessage(`{"dialerProxy": "fragment", "tcpKeepAliveIdle": 100, "tcpMptcp": true, "penetrate": true, "tcpcongestion": "bbr"}`)
+	} else {
+		// Always set optimized sockopt for anti-detection even without fragment
+		if _, hasSockopt := streamSettings["sockopt"]; !hasSockopt {
+			streamSettings["sockopt"] = json_util.RawMessage(`{"tcpKeepAliveIdle": 100, "tcpMptcp": true, "penetrate": true, "tcpcongestion": "bbr"}`)
+		}
 	}
 
 	// remove proxy protocol
@@ -268,8 +273,27 @@ func (s *SubJsonService) realityData(rData map[string]any) map[string]any {
 	rltyData["fingerprint"] = rltyClientSettings["fingerprint"]
 	rltyData["mldsa65Verify"] = rltyClientSettings["mldsa65Verify"]
 
-	// Set random data
-	rltyData["spiderX"] = "/" + random.Seq(15)
+	// Generate realistic SpiderX path that mimics browser navigation
+	spiderXPaths := []string{
+		"/",
+		"/en",
+		"/en-us",
+		"/search?q=" + random.Seq(8),
+		"/products",
+		"/about",
+		"/support",
+		"/docs/" + random.Seq(6),
+		"/blog/" + random.Seq(10),
+		"/api/v1/" + random.Seq(8),
+		"/assets/css/main.css",
+		"/static/js/app." + random.Seq(8) + ".js",
+		"/images/" + random.Seq(12) + ".png",
+		"/cdn-cgi/trace",
+		"/sitemap.xml",
+		"/?lang=en&ref=" + random.Seq(6),
+	}
+	rltyData["spiderX"] = spiderXPaths[random.Num(len(spiderXPaths))]
+
 	shortIds, ok := rData["shortIds"].([]any)
 	if ok && len(shortIds) > 0 {
 		rltyData["shortId"] = shortIds[random.Num(len(shortIds))].(string)

@@ -1,25 +1,63 @@
-// List of popular services for VLESS Reality Target/SNI randomization
+// Extended list of Reality targets for VLESS anti-detection
+// These domains are chosen for:
+// 1. High traffic volume (won't stand out among normal traffic)
+// 2. TLS 1.3 + H2 support (matching modern browser fingerprints)
+// 3. Geographic diversity (different CDN endpoints)
+// 4. Long-lived TLS sessions (stable certificates)
 const REALITY_TARGETS = [
-    { target: 'www.apple.com:443', sni: 'www.apple.com' },
-    { target: 'www.icloud.com:443', sni: 'www.icloud.com' },
-    { target: 'www.amazon.com:443', sni: 'www.amazon.com' },
-    { target: 'aws.amazon.com:443', sni: 'aws.amazon.com' },
+    // Cloud & CDN providers (extremely high traffic, hard to block)
+    { target: 'www.microsoft.com:443', sni: 'www.microsoft.com' },
+    { target: 'www.google.com:443', sni: 'www.google.com' },
+    { target: 'www.cloudflare.com:443', sni: 'www.cloudflare.com' },
+    { target: 'one.one.one.one:443', sni: 'one.one.one.one' },
+    { target: 'www.akamai.com:443', sni: 'www.akamai.com' },
+    // Software & Development (common enterprise traffic)
+    { target: 'github.com:443', sni: 'github.com' },
+    { target: 'www.mozilla.org:443', sni: 'www.mozilla.org' },
+    { target: 'www.docker.com:443', sni: 'www.docker.com' },
+    { target: 'learn.microsoft.com:443', sni: 'learn.microsoft.com' },
+    { target: 'code.visualstudio.com:443', sni: 'code.visualstudio.com' },
+    // E-commerce & Business (very common traffic patterns)
+    { target: 'www.samsung.com:443', sni: 'www.samsung.com' },
+    { target: 'www.dell.com:443', sni: 'www.dell.com' },
+    { target: 'www.hp.com:443', sni: 'www.hp.com' },
+    { target: 'www.lenovo.com:443', sni: 'www.lenovo.com' },
+    { target: 'www.asus.com:443', sni: 'www.asus.com' },
+    // Media & Content (high bandwidth, long sessions)
+    { target: 'www.spotify.com:443', sni: 'www.spotify.com' },
+    { target: 'www.twitch.tv:443', sni: 'www.twitch.tv' },
+    { target: 'www.pinterest.com:443', sni: 'www.pinterest.com' },
+    { target: 'www.reddit.com:443', sni: 'www.reddit.com' },
+    { target: 'stackoverflow.com:443', sni: 'stackoverflow.com' },
+    // Enterprise & SaaS (typical corporate traffic)
     { target: 'www.oracle.com:443', sni: 'www.oracle.com' },
-    { target: 'www.nvidia.com:443', sni: 'www.nvidia.com' },
-    { target: 'www.amd.com:443', sni: 'www.amd.com' },
-    { target: 'www.intel.com:443', sni: 'www.intel.com' },
-    { target: 'www.tesla.com:443', sni: 'www.tesla.com' },
-    { target: 'www.sony.com:443', sni: 'www.sony.com' }
+    { target: 'www.ibm.com:443', sni: 'www.ibm.com' },
+    { target: 'www.cisco.com:443', sni: 'www.cisco.com' },
+    { target: 'www.vmware.com:443', sni: 'www.vmware.com' },
+    { target: 'www.salesforce.com:443', sni: 'www.salesforce.com' },
+    // Regional diversity (for different ISP environments)
+    { target: 'www.booking.com:443', sni: 'www.booking.com' },
+    { target: 'www.airbnb.com:443', sni: 'www.airbnb.com' },
+    { target: 'www.ebay.com:443', sni: 'www.ebay.com' },
+    { target: 'www.paypal.com:443', sni: 'www.paypal.com' },
+    { target: 'www.stripe.com:443', sni: 'www.stripe.com' },
 ];
 
 /**
- * Returns a random Reality target configuration from the predefined list
+ * Returns a random Reality target configuration from the predefined list.
+ * Uses crypto.getRandomValues for better randomness when available.
  * @returns {Object} Object with target and sni properties
  */
 function getRandomRealityTarget() {
-    const randomIndex = Math.floor(Math.random() * REALITY_TARGETS.length);
+    let randomIndex;
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+        const arr = new Uint32Array(1);
+        crypto.getRandomValues(arr);
+        randomIndex = arr[0] % REALITY_TARGETS.length;
+    } else {
+        randomIndex = Math.floor(Math.random() * REALITY_TARGETS.length);
+    }
     const selected = REALITY_TARGETS[randomIndex];
-    // Return a copy to avoid reference issues
     return {
         target: selected.target,
         sni: selected.sni
