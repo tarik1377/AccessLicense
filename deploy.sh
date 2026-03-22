@@ -199,27 +199,268 @@ SQLEOF
 
 log "Панель настроена"
 
-# 5. Nginx — камуфляж
-log "Настраиваю nginx-камуфляж..."
+# 5. Nginx — реальный сайт-прикрытие (статика, без proxy_pass)
+log "Генерирую сайт-прикрытие и настраиваю nginx..."
 if command -v nginx &>/dev/null; then
+    mkdir -p /var/www/cover-site
     mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
 
-    cat > /etc/nginx/sites-available/camouflage << NGXEOF
+    # --- index.html: бизнес-лендинг "CloudVantage Solutions" ---
+    cat > /var/www/cover-site/index.html << 'HTMLEOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="CloudVantage Solutions — enterprise cloud infrastructure, managed services, and DevOps consulting. Scalable, secure, reliable.">
+    <meta name="keywords" content="cloud solutions, managed hosting, DevOps, infrastructure, cloud migration, enterprise IT">
+    <meta name="author" content="CloudVantage Solutions">
+    <meta name="robots" content="index, follow">
+    <title>CloudVantage Solutions — Enterprise Cloud Infrastructure</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☁</text></svg>">
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,sans-serif;color:#1a1a2e;line-height:1.6;background:#fff}
+        .container{max-width:1100px;margin:0 auto;padding:0 24px}
+        /* Nav */
+        nav{background:#fff;border-bottom:1px solid #e8e8e8;padding:16px 0;position:sticky;top:0;z-index:100}
+        nav .container{display:flex;justify-content:space-between;align-items:center}
+        .logo{font-size:1.4rem;font-weight:700;color:#0f4c81;text-decoration:none}
+        .logo span{color:#2d9cdb}
+        nav ul{list-style:none;display:flex;gap:28px}
+        nav a{text-decoration:none;color:#444;font-size:.95rem;transition:color .2s}
+        nav a:hover{color:#0f4c81}
+        /* Hero */
+        .hero{padding:80px 0 60px;text-align:center;background:linear-gradient(135deg,#f0f7ff 0%,#e8f4f8 100%)}
+        .hero h1{font-size:2.6rem;color:#0f4c81;margin-bottom:16px;font-weight:800}
+        .hero p{font-size:1.15rem;color:#555;max-width:620px;margin:0 auto 32px}
+        .btn{display:inline-block;padding:14px 36px;background:#0f4c81;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;font-size:1rem;transition:background .2s}
+        .btn:hover{background:#0d3d6b}
+        .btn-outline{background:transparent;border:2px solid #0f4c81;color:#0f4c81}
+        .btn-outline:hover{background:#0f4c81;color:#fff}
+        /* Services */
+        .services{padding:70px 0;background:#fff}
+        .services h2{text-align:center;font-size:2rem;color:#0f4c81;margin-bottom:12px}
+        .services .subtitle{text-align:center;color:#666;margin-bottom:48px;font-size:1.05rem}
+        .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:28px}
+        .card{padding:32px 28px;border:1px solid #e8e8e8;border-radius:10px;transition:box-shadow .25s}
+        .card:hover{box-shadow:0 8px 30px rgba(15,76,129,.1)}
+        .card .icon{font-size:2rem;margin-bottom:14px}
+        .card h3{font-size:1.2rem;color:#0f4c81;margin-bottom:10px}
+        .card p{color:#555;font-size:.95rem}
+        /* About */
+        .about{padding:70px 0;background:#f8fbff}
+        .about-inner{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+        .about h2{font-size:2rem;color:#0f4c81;margin-bottom:16px}
+        .about p{color:#555;margin-bottom:14px;font-size:1rem}
+        .stats{display:flex;gap:36px;margin-top:24px}
+        .stat-item .num{font-size:2rem;font-weight:800;color:#0f4c81}
+        .stat-item .label{font-size:.85rem;color:#888}
+        /* Contact */
+        .contact{padding:70px 0;background:#fff}
+        .contact h2{text-align:center;font-size:2rem;color:#0f4c81;margin-bottom:12px}
+        .contact .subtitle{text-align:center;color:#666;margin-bottom:40px}
+        .contact-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px}
+        .contact-info div{margin-bottom:20px}
+        .contact-info h4{color:#0f4c81;margin-bottom:4px}
+        .contact-info p{color:#555;font-size:.95rem}
+        form input,form textarea{width:100%;padding:12px 16px;border:1px solid #ddd;border-radius:6px;font-size:.95rem;font-family:inherit;margin-bottom:14px}
+        form textarea{height:120px;resize:vertical}
+        form button{width:100%;padding:14px;background:#0f4c81;color:#fff;border:none;border-radius:6px;font-size:1rem;font-weight:600;cursor:pointer;transition:background .2s}
+        form button:hover{background:#0d3d6b}
+        /* Footer */
+        footer{background:#0f4c81;color:#c8ddf0;padding:36px 0;text-align:center;font-size:.9rem}
+        footer a{color:#8bbee8;text-decoration:none}
+        @media(max-width:768px){
+            .hero h1{font-size:1.8rem}
+            .about-inner,.contact-grid{grid-template-columns:1fr}
+            nav ul{gap:16px}
+            .stats{flex-wrap:wrap;gap:20px}
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="logo">Cloud<span>Vantage</span></a>
+        <ul>
+            <li><a href="#services">Services</a></li>
+            <li><a href="#about">About</a></li>
+            <li><a href="#contact">Contact</a></li>
+        </ul>
+    </div>
+</nav>
+
+<section class="hero">
+    <div class="container">
+        <h1>Enterprise Cloud Infrastructure<br>Built for Scale</h1>
+        <p>We help businesses migrate, optimize, and manage their cloud infrastructure with zero downtime and maximum performance.</p>
+        <a href="#contact" class="btn">Get Started</a>
+        <a href="#services" class="btn btn-outline" style="margin-left:12px">Our Services</a>
+    </div>
+</section>
+
+<section class="services" id="services">
+    <div class="container">
+        <h2>Our Services</h2>
+        <p class="subtitle">End-to-end cloud solutions tailored to your business needs</p>
+        <div class="grid">
+            <div class="card">
+                <div class="icon">&#9729;</div>
+                <h3>Cloud Migration</h3>
+                <p>Seamless migration from on-premise to cloud with automated tooling, data integrity checks, and rollback strategies.</p>
+            </div>
+            <div class="card">
+                <div class="icon">&#9881;</div>
+                <h3>Managed Infrastructure</h3>
+                <p>24/7 monitoring, patching, and incident response. We keep your systems running so you can focus on your product.</p>
+            </div>
+            <div class="card">
+                <div class="icon">&#128274;</div>
+                <h3>Security &amp; Compliance</h3>
+                <p>SOC 2, ISO 27001, and GDPR-ready infrastructure. Vulnerability scanning, WAF, and encrypted data at rest.</p>
+            </div>
+            <div class="card">
+                <div class="icon">&#128200;</div>
+                <h3>DevOps Consulting</h3>
+                <p>CI/CD pipelines, container orchestration, infrastructure as code. Accelerate your delivery cycles by 10x.</p>
+            </div>
+            <div class="card">
+                <div class="icon">&#9889;</div>
+                <h3>Performance Optimization</h3>
+                <p>Reduce latency, optimize costs, and improve throughput. Our engineers analyze and tune every layer of your stack.</p>
+            </div>
+            <div class="card">
+                <div class="icon">&#128218;</div>
+                <h3>Disaster Recovery</h3>
+                <p>Multi-region failover, automated backups, and tested recovery procedures. RPO under 5 minutes, RTO under 15.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="about" id="about">
+    <div class="container">
+        <div class="about-inner">
+            <div>
+                <h2>Why CloudVantage?</h2>
+                <p>Founded in 2019, CloudVantage Solutions has helped over 200 companies modernize their infrastructure. Our team of certified cloud architects brings deep expertise across AWS, Azure, and GCP.</p>
+                <p>We believe infrastructure should be invisible — reliable, fast, and secure without constant attention. That is exactly what we deliver.</p>
+                <div class="stats">
+                    <div class="stat-item">
+                        <div class="num">200+</div>
+                        <div class="label">Clients Served</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="num">99.97%</div>
+                        <div class="label">Uptime SLA</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="num">40+</div>
+                        <div class="label">Engineers</div>
+                    </div>
+                </div>
+            </div>
+            <div style="background:#e0eef9;border-radius:12px;height:320px;display:flex;align-items:center;justify-content:center;color:#0f4c81;font-size:1.1rem;font-weight:600">
+                Trusted by Fortune 500
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="contact" id="contact">
+    <div class="container">
+        <h2>Get in Touch</h2>
+        <p class="subtitle">Ready to transform your infrastructure? Let us know how we can help.</p>
+        <div class="contact-grid">
+            <div class="contact-info">
+                <div>
+                    <h4>Email</h4>
+                    <p>hello@cloudvantage.io</p>
+                </div>
+                <div>
+                    <h4>Phone</h4>
+                    <p>+1 (415) 555-0192</p>
+                </div>
+                <div>
+                    <h4>Office</h4>
+                    <p>548 Market St, Suite 300<br>San Francisco, CA 94104</p>
+                </div>
+                <div>
+                    <h4>Hours</h4>
+                    <p>Monday — Friday, 9:00 AM — 6:00 PM PST<br>24/7 emergency support for managed clients</p>
+                </div>
+            </div>
+            <form onsubmit="return false;">
+                <input type="text" placeholder="Your Name" required>
+                <input type="email" placeholder="Email Address" required>
+                <input type="text" placeholder="Company">
+                <textarea placeholder="Tell us about your project..."></textarea>
+                <button type="submit">Send Message</button>
+            </form>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <p>&copy; 2024 CloudVantage Solutions, Inc. All rights reserved. | <a href="#">Privacy Policy</a> | <a href="#">Terms of Service</a></p>
+    </div>
+</footer>
+
+</body>
+</html>
+HTMLEOF
+
+    # --- robots.txt ---
+    cat > /var/www/cover-site/robots.txt << 'ROBOTSEOF'
+User-agent: *
+Allow: /
+Sitemap: /sitemap.xml
+ROBOTSEOF
+
+    # --- sitemap.xml ---
+    cat > /var/www/cover-site/sitemap.xml << 'SITEMAPEOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>http://localhost/</loc>
+    <lastmod>2024-10-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>
+SITEMAPEOF
+
+    # --- nginx config: статический сайт вместо proxy_pass ---
+    cat > /etc/nginx/sites-available/camouflage << 'NGXEOF'
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
     server_name _;
 
+    root /var/www/cover-site;
+    index index.html;
+
+    # Реальный статический сайт
     location / {
-        proxy_pass https://www.google.com;
-        proxy_set_header Host www.google.com;
-        proxy_set_header Accept-Encoding "";
-        proxy_ssl_server_name on;
-        sub_filter 'google.com' '${SERVER_IP}';
-        sub_filter_once off;
+        try_files $uri $uri/ =404;
     }
 
-    location ~* \.(env|git|svn|htaccess|htpasswd|bak|old|orig|save|conf|cfg|ini|log|sql|db)\$ {
+    # Кэширование статики
+    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2)$ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Блокируем сканеры и утечки конфигов
+    location ~* \.(env|git|svn|htaccess|htpasswd|bak|old|orig|save|conf|cfg|ini|log|sql|db|sh|py|yml|yaml|toml|json)$ {
+        return 404;
+    }
+
+    # Блокируем типичные пути сканеров
+    location ~* /(\.git|\.svn|\.env|wp-admin|wp-login|phpinfo|phpmyadmin|admin|cgi-bin) {
         return 404;
     }
 }
@@ -228,7 +469,7 @@ NGXEOF
     rm -f /etc/nginx/sites-enabled/default
     ln -sf /etc/nginx/sites-available/camouflage /etc/nginx/sites-enabled/
     nginx -t >/dev/null 2>&1 && systemctl restart nginx
-    log "Nginx: порт 80 → камуфляж"
+    log "Nginx: порт 80 → статический сайт-прикрытие (CloudVantage)"
 fi
 
 # 6. Firewall
@@ -377,7 +618,7 @@ if systemctl is-active --quiet x-ui; then
     log "    Links: http://${SERVER_IP}:${SUB_PORT}${SUB_PATH}<subId>"
     log "    JSON:  http://${SERVER_IP}:${SUB_PORT}${SUB_JSON_PATH}<subId>"
     echo ""
-    warn "  Nginx:   порт 80 → google.com (камуфляж)"
+    log "  Nginx:   порт 80 → статический сайт-прикрытие (CloudVantage)"
     echo ""
     log "  ═══ VLESS+Reality (максимальная скорость) ═══"
     log "    1. Панель → Inbounds → Add Inbound"
