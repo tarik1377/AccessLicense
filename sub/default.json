@@ -5,8 +5,15 @@
     "queryStrategy": "UseIP",
     "servers": [
       {
-        "address": "8.8.8.8",
+        "address": "https://1.1.1.1/dns-query",
         "skipFallback": false
+      },
+      {
+        "address": "localhost",
+        "skipFallback": true,
+        "domains": [
+          "geosite:category-ru"
+        ]
       }
     ]
   },
@@ -26,7 +33,8 @@
           "quic",
           "fakedns"
         ],
-        "enabled": true
+        "enabled": true,
+        "routeOnly": true
       },
       "tag": "mixed"
     },
@@ -83,8 +91,87 @@
     }
   },
   "routing": {
-    "domainStrategy": "AsIs",
+    "domainStrategy": "IPIfNonMatch",
     "rules": [
+      {
+        "type": "field",
+        "outboundTag": "direct",
+        "domain": [
+          "geosite:category-ru",
+          "domain:gosuslugi.ru",
+          "domain:esia.gosuslugi.ru",
+          "domain:lk.gosuslugi.ru",
+          "domain:mos.ru",
+          "domain:nalog.gov.ru",
+          "domain:lkfl2.nalog.ru",
+          "domain:cbr.ru",
+          "domain:sberbank.ru",
+          "domain:online.sberbank.ru",
+          "domain:tinkoff.ru",
+          "domain:api.tinkoff.ru",
+          "domain:vtb.ru",
+          "domain:online.vtb.ru",
+          "domain:alfabank.ru",
+          "domain:click.alfabank.ru",
+          "domain:raiffeisen.ru",
+          "domain:gazprombank.ru",
+          "domain:open.ru",
+          "domain:rshb.ru",
+          "domain:sovcombank.ru",
+          "domain:psbank.ru",
+          "domain:rosbank.ru",
+          "domain:mts.ru",
+          "domain:megafon.ru",
+          "domain:beeline.ru",
+          "domain:tele2.ru",
+          "domain:yota.ru",
+          "domain:rt.ru",
+          "domain:rostelecom.ru",
+          "domain:dom.ru",
+          "domain:ertelecom.ru",
+          "domain:1c.ru",
+          "domain:kontur.ru",
+          "domain:diadoc.ru",
+          "domain:sbis.ru",
+          "domain:pfr.gov.ru",
+          "domain:fss.ru",
+          "domain:fas.gov.ru",
+          "domain:rosreestr.gov.ru",
+          "domain:mvd.ru",
+          "domain:fns.ru",
+          "domain:cdek.ru",
+          "domain:pochta.ru",
+          "domain:russianpost.ru",
+          "domain:maxestate.ru",
+          "domain:max.ru",
+          "domain:okko.tv",
+          "domain:ivi.ru",
+          "domain:kinopoisk.ru",
+          "domain:wink.ru",
+          "domain:premier.one",
+          "domain:more.tv",
+          "domain:start.ru",
+          "domain:wildberries.ru",
+          "domain:ozon.ru",
+          "domain:avito.ru",
+          "domain:market.yandex.ru",
+          "domain:yandex.ru",
+          "domain:ya.ru",
+          "domain:mail.ru",
+          "domain:vk.com",
+          "domain:ok.ru",
+          "domain:2gis.ru",
+          "domain:rkn.gov.ru"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "direct",
+        "ip": [
+          "geoip:ru",
+          "geoip:private"
+        ]
+      },
       {
         "type": "field",
         "network": "tcp,udp",

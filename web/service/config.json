@@ -4,7 +4,7 @@
     "dnsLog": false,
     "error": "",
     "loglevel": "warning",
-    "maskAddress": ""
+    "maskAddress": "half"
   },
   "api": {
     "tag": "api",
@@ -37,6 +37,11 @@
             "type": "rand",
             "packet": "100-300",
             "delay": "10-16"
+          },
+          {
+            "type": "rand",
+            "packet": "50-150",
+            "delay": "20-50"
           }
         ]
       }
@@ -51,7 +56,12 @@
     "levels": {
       "0": {
         "statsUserDownlink": true,
-        "statsUserUplink": true
+        "statsUserUplink": true,
+        "handshake": 8,
+        "connIdle": 300,
+        "uplinkOnly": 2,
+        "downlinkOnly": 5,
+        "bufferSize": 4
       }
     },
     "system": {

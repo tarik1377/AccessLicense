@@ -374,10 +374,10 @@ class KcpStreamSettings extends XrayCommonClass {
 class WsStreamSettings extends XrayCommonClass {
     constructor(
         acceptProxyProtocol = false,
-        path = '/',
+        path = '/ws',
         host = '',
         headers = [],
-        heartbeatPeriod = 0,
+        heartbeatPeriod = 30,
     ) {
         super();
         this.acceptProxyProtocol = acceptProxyProtocol;
@@ -448,7 +448,7 @@ class GrpcStreamSettings extends XrayCommonClass {
 class HTTPUpgradeStreamSettings extends XrayCommonClass {
     constructor(
         acceptProxyProtocol = false,
-        path = '/',
+        path = '/upgrade',
         host = '',
         headers = []
     ) {
@@ -488,7 +488,7 @@ class HTTPUpgradeStreamSettings extends XrayCommonClass {
 
 class xHTTPStreamSettings extends XrayCommonClass {
     constructor(
-        path = '/',
+        path = '/api/v1/data',
         host = '',
         headers = [],
         scMaxBufferedPosts = 30,
@@ -497,16 +497,16 @@ class xHTTPStreamSettings extends XrayCommonClass {
         noSSEHeader = false,
         xPaddingBytes = "100-1000",
         mode = MODE_OPTION.AUTO,
-        xPaddingObfsMode = false,
-        xPaddingKey = '',
-        xPaddingHeader = '',
-        xPaddingPlacement = '',
-        xPaddingMethod = '',
-        uplinkHTTPMethod = '',
-        sessionPlacement = '',
-        sessionKey = '',
-        seqPlacement = '',
-        seqKey = '',
+        xPaddingObfsMode = true,
+        xPaddingKey = 'X-Content-Length',
+        xPaddingHeader = 'X-Req-Id',
+        xPaddingPlacement = 'header',
+        xPaddingMethod = 'tokenish',
+        uplinkHTTPMethod = 'POST',
+        sessionPlacement = 'cookie',
+        sessionKey = 'session_id',
+        seqPlacement = 'header',
+        seqKey = 'X-Request-Seq',
         uplinkDataPlacement = '',
         uplinkDataKey = '',
         uplinkChunkSize = 0,

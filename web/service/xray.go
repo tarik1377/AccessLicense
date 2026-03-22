@@ -174,6 +174,12 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 			if ok1 || ok2 {
 				if ok1 {
 					delete(tlsSettings, "settings")
+					// Harden TLS for hosting provider stealth:
+					// Reject unknown SNI to prevent active probing from
+					// detecting that this is a proxy server
+					if _, ok := tlsSettings["rejectUnknownSni"]; !ok {
+						tlsSettings["rejectUnknownSni"] = true
+					}
 				} else if ok2 {
 					delete(realitySettings, "settings")
 
