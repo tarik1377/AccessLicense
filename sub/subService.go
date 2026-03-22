@@ -973,7 +973,11 @@ func (s *SubService) genRemark(inbound *model.Inbound, email string, extra strin
 // generateRealisticSpiderX creates browser-like URL paths for Reality SpiderX
 // to avoid DPI detection of static/predictable patterns
 func generateRealisticSpiderX() string {
+	timestamp := fmt.Sprintf("%d", time.Now().Unix())
+	sessionId := random.Seq(12)
+
 	paths := []string{
+		// Generic website paths
 		"/",
 		"/en",
 		"/en-us",
@@ -983,12 +987,66 @@ func generateRealisticSpiderX() string {
 		"/support",
 		"/docs/" + random.Seq(6),
 		"/blog/" + random.Seq(10),
-		"/api/v1/" + random.Seq(8),
-		"/assets/css/main.css",
-		"/static/js/app." + random.Seq(8) + ".js",
-		"/images/" + random.Seq(12) + ".png",
-		"/cdn-cgi/trace",
 		"/?lang=en&ref=" + random.Seq(6),
+
+		// CDN / Cloudflare-style paths
+		"/cdn-cgi/trace",
+		"/cdn-cgi/scripts/" + random.Seq(10) + "/cloudflare-static/email-decode.min.js",
+		"/cdn-cgi/challenge-platform/h/g/orchestrate/chl_page/v1?ray=" + random.Seq(16),
+		"/cdn-cgi/rum?req=" + random.Seq(20) + "&t=" + timestamp,
+		"/ajax/libs/jquery/3.7.1/jquery.min.js",
+		"/ajax/libs/font-awesome/6.5.1/css/all.min.css",
+
+		// Asset / chunk paths (Webpack/Vite style)
+		"/assets/js/chunk-" + random.Seq(8) + ".js",
+		"/assets/js/vendor." + random.Seq(12) + ".js",
+		"/assets/css/app." + random.Seq(8) + ".css",
+		"/static/js/app." + random.Seq(8) + ".js",
+		"/static/js/" + random.Seq(4) + "." + random.Seq(8) + ".chunk.js",
+		"/static/media/" + random.Seq(10) + "." + random.Seq(8) + ".woff2",
+		"/_next/static/chunks/pages/_app-" + random.Seq(16) + ".js",
+		"/_next/static/" + random.Seq(20) + "/_buildManifest.js",
+		"/_next/image?url=%2Fimages%2F" + random.Seq(8) + ".webp&w=1920&q=75",
+		"/images/" + random.Seq(12) + ".png",
+		"/assets/css/main.css",
+
+		// Microsoft-style paths
+		"/en-us/windows/get-started/",
+		"/en-us/microsoft-365/business/compare-all-plans?activetab=tab:primaryr2",
+		"/en-us/edge/welcome?form=" + random.Seq(6) + "&channel=stable",
+		"/msdownload/update/v3/static/trustedr/en/authrootstl.cab?t=" + timestamp,
+		"/v1.0/me/drive/root/children?$top=20&sid=" + sessionId,
+		"/onenote/v1.0/pages?$filter=createdDateTime ge " + random.Seq(10),
+		"/identity/v1.0/.well-known/openid-configuration",
+
+		// Apple-style paths
+		"/v1/config?t=" + timestamp + "&sid=" + sessionId,
+		"/retail/availability?product=MYW73LL/A&location=" + random.Seq(5),
+		"/shop/go/account/orders?t=" + timestamp,
+		"/105/media/us/iphone/family/" + random.Seq(12) + "/hero_" + random.Seq(6) + ".jpg",
+		"/services/i/identify?build=" + random.Seq(5) + "&clientId=" + random.Seq(16),
+
+		// API versioned paths (telemetry/config)
+		"/api/v1/" + random.Seq(8),
+		"/api/v2/telemetry?sid=" + sessionId + "&t=" + timestamp,
+		"/api/v2/events?batch=" + random.Seq(6) + "&seq=" + random.Seq(3),
+		"/api/v3/config?app=" + random.Seq(8) + "&ver=2.1." + random.Seq(2),
+		"/api/v3/heartbeat?uid=" + random.Seq(16),
+		"/api/v1/session/renew?token=" + random.Seq(24),
+		"/graphql?operationName=" + random.Seq(10) + "&variables=%7B%7D",
+
+		// Query parameters with timestamp/session
+		"/collect?v=2&tid=G-" + random.Seq(10) + "&cid=" + random.Seq(16) + "&t=" + timestamp,
+		"/r/collect?v=1&_v=j101&a=" + random.Seq(9) + "&t=pageview&_s=1&dl=https%3A%2F%2Fwww." + random.Seq(8) + ".com",
+		"/log?type=performance&sid=" + sessionId + "&t=" + timestamp + "&dur=" + random.Seq(3),
+
+		// Referer-like browsing paths
+		"/en-us/windows/get-started/set-up-your-pc",
+		"/en-us/learn/modules/introduction-to-azure/",
+		"/en-us/training/paths/azure-fundamentals/",
+		"/support/en-us/topic/" + random.Seq(8),
+		"/store/category/devices?icid=" + random.Seq(12),
+		"/privacy/privacystatement?t=" + timestamp,
 	}
 	return paths[random.Num(len(paths))]
 }

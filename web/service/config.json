@@ -6,6 +6,32 @@
     "loglevel": "warning",
     "maskAddress": "half"
   },
+  "dns": {
+    "servers": [
+      {
+        "address": "https://dns.google/dns-query",
+        "domains": [
+          "geosite:geolocation-!cn"
+        ],
+        "expectIPs": []
+      },
+      {
+        "address": "https://cloudflare-dns.com/dns-query",
+        "domains": [
+          "geosite:geolocation-!cn"
+        ],
+        "expectIPs": []
+      },
+      {
+        "address": "localhost",
+        "domains": [
+          "geosite:category-ru"
+        ]
+      }
+    ],
+    "queryStrategy": "UseIP",
+    "tag": "dns-in"
+  },
   "api": {
     "tag": "api",
     "services": [
@@ -50,6 +76,18 @@
       "tag": "blocked",
       "protocol": "blackhole",
       "settings": {}
+    },
+    {
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "AsIs",
+        "fragment": {
+          "packets": "tlshello",
+          "length": "50-100",
+          "interval": "10-15"
+        }
+      },
+      "tag": "fragment"
     }
   ],
   "policy": {
@@ -57,8 +95,8 @@
       "0": {
         "statsUserDownlink": true,
         "statsUserUplink": true,
-        "handshake": 8,
-        "connIdle": 300,
+        "handshake": 2,
+        "connIdle": 120,
         "uplinkOnly": 2,
         "downlinkOnly": 5,
         "bufferSize": 4
@@ -72,7 +110,7 @@
     }
   },
   "routing": {
-    "domainStrategy": "AsIs",
+    "domainStrategy": "IPIfNonMatch",
     "rules": [
       {
         "type": "field",
@@ -84,8 +122,30 @@
       {
         "type": "field",
         "outboundTag": "blocked",
+        "domain": [
+          "geosite:category-ads-all"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "blocked",
+        "domain": [
+          "geosite:win-spy",
+          "geosite:win-extra"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "direct",
         "ip": [
           "geoip:private"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "direct",
+        "domain": [
+          "geosite:category-ru"
         ]
       },
       {

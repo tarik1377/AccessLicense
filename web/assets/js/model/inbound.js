@@ -2060,12 +2060,31 @@ Inbound.VLESSSettings = class extends Inbound.Settings {
     // [2]: second padding range (600-1200)
     // [3]: chunk size factor (128-512)
     static generateRandomTestseed() {
-        const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+        // Use crypto-grade randomness when available for less predictable values
+        const rand = (min, max) => {
+            if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+                const range = max - min + 1;
+                const bytesNeeded = Math.ceil(Math.log2(range) / 8) || 1;
+                const maxValid = Math.floor(256 ** bytesNeeded / range) * range - 1;
+                let arr = new Uint8Array(bytesNeeded);
+                let val;
+                do {
+                    crypto.getRandomValues(arr);
+                    val = arr.reduce((acc, v, i) => acc + v * (256 ** i), 0);
+                } while (val > maxValid);
+                return min + (val % range);
+            }
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        };
+
+        // Wider, non-uniform ranges with prime-offset jitter for higher entropy
+        // This defeats statistical DPI that looks for fixed-range uniform distributions
+        const jitter = rand(0, 97);  // prime number jitter offset
         return [
-            rand(600, 1200),
-            rand(300, 700),
-            rand(600, 1200),
-            rand(128, 512),
+            rand(200, 2400) + (jitter % 37),
+            rand(100, 1500) + (jitter % 23),
+            rand(200, 2400) + (jitter % 41),
+            rand(64, 1024)  + (jitter % 19),
         ];
     }
 

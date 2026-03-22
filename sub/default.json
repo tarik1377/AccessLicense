@@ -52,6 +52,25 @@
   },
   "outbounds": [
     {
+      "tag": "fragment",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "AsIs",
+        "fragment": {
+          "packets": "tlshello",
+          "length": "50-100",
+          "interval": "10-15"
+        },
+        "noises": [
+          {
+            "type": "rand",
+            "packet": "10-30",
+            "delay": "10-16"
+          }
+        ]
+      }
+    },
+    {
       "tag": "direct",
       "protocol": "freedom",
       "settings": {
@@ -60,7 +79,7 @@
         "noises": [
           {
             "type": "rand",
-            "packet": "100-300",
+            "packet": "10-30",
             "delay": "10-16"
           }
         ]
@@ -175,7 +194,7 @@
       {
         "type": "field",
         "network": "tcp,udp",
-        "outboundTag": "proxy"
+        "outboundTag": "fragment"
       }
     ]
   },

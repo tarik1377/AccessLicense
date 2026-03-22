@@ -222,14 +222,8 @@ func (s *SubJsonService) streamData(stream string) map[string]any {
 	}
 	delete(streamSettings, "sockopt")
 
-	if s.fragment != "" {
-		streamSettings["sockopt"] = json_util.RawMessage(`{"dialerProxy": "fragment", "tcpKeepAliveIdle": 100, "tcpMptcp": true, "penetrate": true, "tcpcongestion": "bbr"}`)
-	} else {
-		// Always set optimized sockopt for anti-detection even without fragment
-		if _, hasSockopt := streamSettings["sockopt"]; !hasSockopt {
-			streamSettings["sockopt"] = json_util.RawMessage(`{"tcpKeepAliveIdle": 100, "tcpMptcp": true, "penetrate": true, "tcpcongestion": "bbr"}`)
-		}
-	}
+	// Always route through fragment outbound for DPI bypass (fragment is always in defaultOutbounds via default.json)
+	streamSettings["sockopt"] = json_util.RawMessage(`{"dialerProxy": "fragment", "tcpKeepAliveIdle": 100, "tcpMptcp": true, "penetrate": true, "tcpcongestion": "bbr", "mark": 255}`)
 
 	// remove proxy protocol
 	network, _ := streamSettings["network"].(string)
@@ -326,9 +320,7 @@ func (s *SubJsonService) genVnext(inbound *model.Inbound, streamSettings json_ut
 
 	outbound.Protocol = string(inbound.Protocol)
 	outbound.Tag = "proxy"
-	if s.mux != "" {
-		outbound.Mux = json_util.RawMessage(s.mux)
-	}
+	outbound.Mux = s.muxConfig()
 	outbound.StreamSettings = streamSettings
 	outbound.Settings = map[string]any{
 		"vnext": vnextData,
@@ -342,9 +334,7 @@ func (s *SubJsonService) genVless(inbound *model.Inbound, streamSettings json_ut
 	outbound := Outbound{}
 	outbound.Protocol = string(inbound.Protocol)
 	outbound.Tag = "proxy"
-	if s.mux != "" {
-		outbound.Mux = json_util.RawMessage(s.mux)
-	}
+	outbound.Mux = s.muxConfig()
 	outbound.StreamSettings = streamSettings
 	settings := make(map[string]any)
 	settings["address"] = inbound.Listen
@@ -393,9 +383,7 @@ func (s *SubJsonService) genServer(inbound *model.Inbound, streamSettings json_u
 
 	outbound.Protocol = string(inbound.Protocol)
 	outbound.Tag = "proxy"
-	if s.mux != "" {
-		outbound.Mux = json_util.RawMessage(s.mux)
-	}
+	outbound.Mux = s.muxConfig()
 	outbound.StreamSettings = streamSettings
 	outbound.Settings = map[string]any{
 		"servers": serverData,
@@ -403,6 +391,14 @@ func (s *SubJsonService) genServer(inbound *model.Inbound, streamSettings json_u
 
 	result, _ := json.MarshalIndent(outbound, "", "  ")
 	return result
+}
+
+// muxConfig returns the mux configuration, using user-provided settings or optimal defaults.
+func (s *SubJsonService) muxConfig() json_util.RawMessage {
+	if s.mux != "" {
+		return json_util.RawMessage(s.mux)
+	}
+	return json_util.RawMessage(`{"enabled": true, "concurrency": 8, "xudpConcurrency": 16, "xudpProxyUDP443": "allow"}`)
 }
 
 type Outbound struct {
