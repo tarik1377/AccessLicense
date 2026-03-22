@@ -1873,6 +1873,23 @@ show_vless_reality_guide() {
     echo -e "  - Recommended: ${green}1 inbound per 100 users${plain} for optimal performance"
     echo ""
     echo -e "${green}════════════════════════════════════════════════════════════════${plain}"
+    echo ""
+    echo -e "${yellow}=== Two-Hop Chain (RU Cloud -> EU) ===${plain}"
+    echo ""
+    echo -e "  For servers in Yandex/VK Cloud:"
+    echo -e "  Hop 1 (Client -> RU): ${blue}VLESS+Reality+Vision+TCP${plain}, dest=yandex.ru"
+    echo -e "  Hop 2 (RU -> EU):     ${blue}VLESS+xHTTP+TLS${plain} via Cloudflare CDN"
+    echo ""
+    echo -e "${yellow}  Setup Hop 2:${plain}"
+    echo -e "  1. EU server: create VLESS inbound with ${blue}xHTTP${plain} transport + TLS"
+    echo -e "  2. Put EU server behind Cloudflare (domain -> CF -> EU IP)"
+    echo -e "  3. RU panel: ${blue}Xray Settings -> Outbounds -> Add VLESS outbound${plain}"
+    echo -e "     - Address: ${blue}your-domain.com${plain} (behind CF)"
+    echo -e "     - Transport: ${blue}xHTTP${plain}"
+    echo -e "     - Security: ${blue}TLS${plain}"
+    echo -e "  4. Routing: non-RU traffic -> chain outbound"
+    echo ""
+    echo -e "${green}════════════════════════════════════════════════════════════════${plain}"
 
     if [[ $# == 0 ]]; then
         before_show_menu

@@ -199,7 +199,7 @@ if confirm "Шаг 2/4: Anti-fingerprinting (nginx headers, ICMP timestamps)?"; 
 net.ipv4.icmp_echo_ignore_all = 0
 net.ipv4.icmp_echo_ignore_broadcasts = 1
 net.ipv4.icmp_ignore_bogus_error_responses = 1
-net.ipv4.tcp_timestamps = 0
+net.ipv4.tcp_timestamps = 1
 EOF
         sysctl -p "$SYSCTL_HARDEN" >/dev/null 2>&1 || true
         CHANGES+=("ICMP: timestamps отключены, broadcast echo отключен")

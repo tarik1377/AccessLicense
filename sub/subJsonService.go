@@ -269,7 +269,8 @@ func (s *SubJsonService) realityData(rData map[string]any) map[string]any {
 
 	rltyData["show"] = false
 	rltyData["publicKey"] = rltyClientSettings["publicKey"]
-	rltyData["fingerprint"] = rltyClientSettings["fingerprint"]
+	fp, _ := rltyClientSettings["fingerprint"].(string)
+	rltyData["fingerprint"] = getFingerprint(fp)
 	rltyData["mldsa65Verify"] = rltyClientSettings["mldsa65Verify"]
 
 	// Generate realistic SpiderX path that mimics browser navigation
