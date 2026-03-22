@@ -520,10 +520,10 @@ func (s *SubService) genVlessLink(inbound *model.Inbound, email string, defaultA
 	return url.String()
 }
 
-func (s *SubService) genTrojanLink(inbound *model.Inbound, email string) string {
+func (s *SubService) genTrojanLink(inbound *model.Inbound, email string, defaultAddress string) string {
 	var address string
 	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
-		address = s.address
+		address = defaultAddress
 	} else {
 		address = inbound.Listen
 	}
@@ -718,10 +718,10 @@ func (s *SubService) genTrojanLink(inbound *model.Inbound, email string) string 
 	return url.String()
 }
 
-func (s *SubService) genShadowsocksLink(inbound *model.Inbound, email string) string {
+func (s *SubService) genShadowsocksLink(inbound *model.Inbound, email string, defaultAddress string) string {
 	var address string
 	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
-		address = s.address
+		address = defaultAddress
 	} else {
 		address = inbound.Listen
 	}
@@ -1299,8 +1299,8 @@ func (s *SubService) BuildPageData(subId string, hostHeader string, traffic xray
 		remained = common.FormatTraffic(left)
 	}
 
-	datepicker := s.datepicker
-	if datepicker == "" {
+	datepicker, err := s.settingService.GetDatepicker()
+	if err != nil || datepicker == "" {
 		datepicker = "gregorian"
 	}
 
