@@ -52,6 +52,8 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/lastOnline", a.lastOnline)
 	g.POST("/updateClientTraffic/:email", a.updateClientTraffic)
 	g.POST("/:id/delClientByEmail/:email", a.delInboundClientByEmail)
+	g.POST("/clientDevices/:email", a.getClientDevices)
+	g.POST("/clearClientDevices/:email", a.clearClientDevices)
 }
 
 // getInbounds retrieves the list of inbounds for the logged-in user.
@@ -453,4 +455,26 @@ func (a *InboundController) delInboundClientByEmail(c *gin.Context) {
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
+}
+
+// getClientDevices returns all tracked devices for a client by email.
+func (a *InboundController) getClientDevices(c *gin.Context) {
+	email := c.Param("email")
+	devices, err := a.inboundService.GetClientDevices(email)
+	if err != nil {
+		jsonObj(c, "No device records", nil)
+		return
+	}
+	jsonObj(c, devices, nil)
+}
+
+// clearClientDevices clears all tracked devices for a client by email.
+func (a *InboundController) clearClientDevices(c *gin.Context) {
+	email := c.Param("email")
+	err := a.inboundService.ClearClientDevices(email)
+	if err != nil {
+		jsonMsg(c, "Failed to clear device records", err)
+		return
+	}
+	jsonMsg(c, "Device records cleared", nil)
 }

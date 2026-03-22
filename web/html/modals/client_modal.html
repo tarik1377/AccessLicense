@@ -82,6 +82,13 @@
         el: '#client-modal',
         data: {
             clientModal,
+            clientDevices: [],
+            deviceColumns: [
+                { title: 'Platform', dataIndex: 'platform', scopedSlots: { customRender: 'platform' }, width: 100 },
+                { title: 'Last IP', dataIndex: 'lastIp', scopedSlots: { customRender: 'lastIp' }, width: 130 },
+                { title: 'Last Seen', dataIndex: 'lastSeen', scopedSlots: { customRender: 'lastSeen' }, width: 160 },
+                { title: 'Connections', dataIndex: 'connectionCount', scopedSlots: { customRender: 'connectionCount' }, width: 90 },
+            ],
             get inbound() {
                 return this.clientModal.inbound;
             },
@@ -145,6 +152,20 @@
                     }
                     document.getElementById("clientIPs").value = "";
                 } catch (error) {
+                }
+            },
+            async getClientDevices(email) {
+                const msg = await HttpUtil.post(`/panel/api/inbounds/clientDevices/${email}`);
+                if (msg.success && msg.obj) {
+                    this.clientDevices = Array.isArray(msg.obj) ? msg.obj : [];
+                } else {
+                    this.clientDevices = [];
+                }
+            },
+            async clearClientDevices(email) {
+                const msg = await HttpUtil.post(`/panel/api/inbounds/clearClientDevices/${email}`);
+                if (msg.success) {
+                    this.clientDevices = [];
                 }
             },
             resetClientTraffic(email, dbInboundId, iconElement) {

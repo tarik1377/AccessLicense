@@ -2,7 +2,10 @@ package job
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -10,6 +13,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v2/database"
@@ -124,6 +128,7 @@ func (j *CheckClientIpJob) hasLimitIp() bool {
 func (j *CheckClientIpJob) processLogFile() bool {
 
 	ipRegex := regexp.MustCompile(`from (?:tcp:|udp:)?\[?([0-9a-fA-F\.:]+)\]?:\d+ accepted`)
+	protocolRegex := regexp.MustCompile(`from (tcp|udp):`)
 	emailRegex := regexp.MustCompile(`email: (.+)$`)
 	timestampRegex := regexp.MustCompile(`^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})`)
 
@@ -168,6 +173,16 @@ func (j *CheckClientIpJob) processLogFile() bool {
 		} else {
 			timestamp = time.Now().Unix()
 		}
+
+		// Extract protocol for device fingerprinting
+		protocol := "tcp"
+		protoMatches := protocolRegex.FindStringSubmatch(line)
+		if len(protoMatches) >= 2 {
+			protocol = protoMatches[1]
+		}
+
+		// Track device connection
+		j.updateDeviceTracking(email, ip, protocol, timestamp)
 
 		if _, exists := inboundClientIps[email]; !exists {
 			inboundClientIps[email] = make(map[string]int64)
@@ -388,4 +403,74 @@ func (j *CheckClientIpJob) getInboundByEmail(clientEmail string) (*model.Inbound
 	}
 
 	return inbound, nil
+}
+
+// generateDeviceId creates a stable device fingerprint from connection metadata.
+// Uses IP subnet + protocol to group connections from the same device even if
+// the exact IP changes within the same network.
+func generateDeviceId(ip string, protocol string) string {
+	// Use /24 subnet for IPv4, /64 for IPv6 to group IPs from same device
+	subnet := ip
+	if strings.Contains(ip, ".") {
+		// IPv4: use first 3 octets
+		parts := strings.Split(ip, ".")
+		if len(parts) >= 3 {
+			subnet = strings.Join(parts[:3], ".") + ".0/24"
+		}
+	} else if strings.Contains(ip, ":") {
+		// IPv6: use first 4 groups
+		parts := strings.Split(ip, ":")
+		if len(parts) >= 4 {
+			subnet = strings.Join(parts[:4], ":") + "::/64"
+		}
+	}
+
+	fingerprint := fmt.Sprintf("%s|%s", subnet, protocol)
+	hash := sha256.Sum256([]byte(fingerprint))
+	return hex.EncodeToString(hash[:16]) // 32 char hex
+}
+
+// detectPlatformFromIP attempts to classify the connection source.
+// With raw TCP, we rely on IP-based heuristics and connection patterns.
+func detectPlatformFromProtocol(protocol string) string {
+	switch strings.ToLower(protocol) {
+	case "tcp":
+		return "Desktop/Mobile"
+	case "udp":
+		return "Mobile (UDP)"
+	default:
+		return "Unknown"
+	}
+}
+
+// updateDeviceTracking records device connection info in the database
+func (j *CheckClientIpJob) updateDeviceTracking(email string, ip string, protocol string, timestamp int64) {
+	db := database.GetDB()
+	deviceId := generateDeviceId(ip, protocol)
+	platform := detectPlatformFromProtocol(protocol)
+
+	device := &model.ClientDevice{}
+	err := db.Where("client_email = ? AND device_id = ?", email, deviceId).First(device).Error
+	if err != nil {
+		// New device
+		device = &model.ClientDevice{
+			ClientEmail:     email,
+			DeviceId:        deviceId,
+			Platform:        platform,
+			ClientApp:       "Unknown",
+			LastIP:          ip,
+			FirstSeen:       timestamp,
+			LastSeen:        timestamp,
+			ConnectionCount: 1,
+			IsActive:        true,
+		}
+		db.Create(device)
+	} else {
+		// Update existing device
+		db.Model(device).Updates(map[string]any{
+			"last_ip":          ip,
+			"last_seen":        timestamp,
+			"connection_count": device.ConnectionCount + 1,
+		})
+	}
 }

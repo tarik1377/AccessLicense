@@ -2193,6 +2193,23 @@ func (s *InboundService) ClearClientIps(clientEmail string) error {
 	return nil
 }
 
+// GetClientDevices retrieves all tracked devices for a client by email.
+func (s *InboundService) GetClientDevices(clientEmail string) ([]model.ClientDevice, error) {
+	db := database.GetDB()
+	var devices []model.ClientDevice
+	err := db.Where("client_email = ?", clientEmail).Order("last_seen DESC").Find(&devices).Error
+	if err != nil {
+		return nil, err
+	}
+	return devices, nil
+}
+
+// ClearClientDevices removes all tracked devices for a client by email.
+func (s *InboundService) ClearClientDevices(clientEmail string) error {
+	db := database.GetDB()
+	return db.Where("client_email = ?", clientEmail).Delete(&model.ClientDevice{}).Error
+}
+
 func (s *InboundService) SearchInbounds(query string) ([]*model.Inbound, error) {
 	db := database.GetDB()
 	var inbounds []*model.Inbound

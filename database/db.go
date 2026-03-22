@@ -36,6 +36,7 @@ func initModels() error {
 		&model.OutboundTraffics{},
 		&model.Setting{},
 		&model.InboundClientIps{},
+		&model.ClientDevice{},
 		&xray.ClientTraffic{},
 		&model.HistoryOfSeeders{},
 	}

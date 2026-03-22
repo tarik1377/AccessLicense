@@ -188,10 +188,19 @@ func (a *SUBController) ApplyCommonHeaders(
 	profileEnableRouting bool,
 	profileRoutingRules string,
 ) {
+	// Standard subscription headers (V2RayNG, V2RayTun, Streisand, Shadowrocket)
 	c.Writer.Header().Set("Subscription-Userinfo", header)
 	c.Writer.Header().Set("Profile-Update-Interval", updateInterval)
 
-	//Basics
+	// Content-Type for proper client parsing
+	c.Writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+	// Content-Disposition helps clients identify the subscription
+	if profileTitle != "" {
+		c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.txt\"", profileTitle))
+	}
+
+	// Basics - supported by most clients
 	if profileTitle != "" {
 		c.Writer.Header().Set("Profile-Title", "base64:"+base64.StdEncoding.EncodeToString([]byte(profileTitle)))
 	}
@@ -205,9 +214,13 @@ func (a *SUBController) ApplyCommonHeaders(
 		c.Writer.Header().Set("Announce", "base64:"+base64.StdEncoding.EncodeToString([]byte(profileAnnounce)))
 	}
 
-	//Advanced (Happ)
+	// Advanced (Happ client support)
 	c.Writer.Header().Set("Routing-Enable", strconv.FormatBool(profileEnableRouting))
 	if profileRoutingRules != "" {
 		c.Writer.Header().Set("Routing", profileRoutingRules)
 	}
+
+	// CORS headers for client apps that fetch via HTTP
+	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+	c.Writer.Header().Set("Access-Control-Expose-Headers", "Subscription-Userinfo, Profile-Update-Interval, Profile-Title, Support-Url, Profile-Web-Page-Url, Announce, Routing-Enable, Routing, Content-Disposition")
 }

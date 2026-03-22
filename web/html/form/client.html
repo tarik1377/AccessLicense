@@ -107,6 +107,25 @@
             </a-textarea>
         </a-form>
     </a-form-item>
+    <a-form-item v-if="client.email && isEdit" label="Devices">
+        <a-button type="primary" size="small" icon="mobile" @click="getClientDevices(client.email)">
+            Show Devices
+        </a-button>
+        <a-tooltip>
+            <template slot="title">Clear device history</template>
+            <a-icon type="delete" :style="{ color: '#FF4D4F', marginLeft: '8px', cursor: 'pointer' }"
+                @click="clearClientDevices(client.email)"></a-icon>
+        </a-tooltip>
+        <a-form layout="block" v-if="clientDevices && clientDevices.length > 0">
+            <a-table :columns="deviceColumns" :data-source="clientDevices" size="small"
+                :pagination="false" :row-key="record => record.deviceId" :style="{ marginTop: '8px' }">
+                <template slot="platform" slot-scope="text">[[ text || 'Unknown' ]]</template>
+                <template slot="lastIp" slot-scope="text">[[ text ]]</template>
+                <template slot="lastSeen" slot-scope="text">[[ text > 0 ? new Date(text * 1000).toLocaleString() : '-' ]]</template>
+                <template slot="connectionCount" slot-scope="text">[[ text ]]</template>
+            </a-table>
+        </a-form>
+    </a-form-item>
     <a-form-item v-if="inbound.canEnableTlsFlow()" label='Flow'>
         <a-select v-model="client.flow" :dropdown-class-name="themeSwitcher.currentTheme">
             <a-select-option value="" selected>{{ i18n "none" }}</a-select-option>
