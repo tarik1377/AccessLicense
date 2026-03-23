@@ -8,8 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tarik1377/AccessLicense/v2/config"
-
 	"github.com/gin-gonic/gin"
 )
 
