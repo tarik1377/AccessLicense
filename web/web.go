@@ -188,6 +188,9 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		c.Header("X-Frame-Options", "SAMEORIGIN")
 		c.Header("X-XSS-Protection", "1; mode=block")
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+		c.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		// Strip Server header to prevent Gin framework fingerprinting
+		c.Writer.Header().Del("Server")
 		c.Next()
 	})
 
@@ -288,13 +291,9 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	// Register WebSocket route with basePath (g already has basePath prefix)
 	g.GET("/ws", s.ws.HandleWebSocket)
 
-	// Chrome DevTools endpoint for debugging web apps
-	engine.GET("/.well-known/appspecific/com.chrome.devtools.json", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{})
-	})
-
-	// Add a catch-all route to handle undefined paths and return 404
+	// Catch-all: return bare 404 without framework-identifying headers
 	engine.NoRoute(func(c *gin.Context) {
+		c.Writer.Header().Del("Server")
 		c.AbortWithStatus(http.StatusNotFound)
 	})
 
@@ -428,6 +427,11 @@ func (s *Server) Start() (err error) {
 		if err == nil {
 			c := &tls.Config{
 				Certificates: []tls.Certificate{cert},
+				MinVersion:   tls.VersionTLS12,
+				CurvePreferences: []tls.CurveID{
+					tls.X25519,
+					tls.CurveP256,
+				},
 			}
 			listener = network.NewAutoHttpsListener(listener)
 			listener = tls.NewListener(listener, c)
