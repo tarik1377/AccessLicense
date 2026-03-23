@@ -342,13 +342,17 @@ if command -v nginx &>/dev/null; then
                     <p>Monday — Friday, 9:00 AM — 6:00 PM PST<br>24/7 emergency support for managed clients</p>
                 </div>
             </div>
-            <form onsubmit="return false;">
+            <form id="contactForm" onsubmit="event.preventDefault();this.style.display='none';document.getElementById('formSuccess').style.display='block';">
                 <input type="text" placeholder="Your Name" required>
                 <input type="email" placeholder="Email Address" required>
                 <input type="text" placeholder="Company">
                 <textarea placeholder="Tell us about your project..."></textarea>
                 <button type="submit">Send Message</button>
             </form>
+            <div id="formSuccess" style="display:none;text-align:center;padding:40px 0;">
+                <h3 style="color:#0f4c81;">Thank you!</h3>
+                <p style="color:#555;margin-top:8px;">Your message has been received. Our team will get back to you within 1-2 business days.</p>
+            </div>
         </div>
     </div>
 </section>
@@ -402,6 +406,17 @@ server {
 
     root /var/www/cover-site;
     index index.html;
+
+    # Скрываем версию Nginx
+    server_tokens off;
+
+    # Security headers — имитируем настоящий корпоративный сайт
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Content-Security-Policy "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
 
     # Реальный статический сайт
     location / {
