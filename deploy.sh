@@ -4,7 +4,15 @@
 # AccessLicense Deploy — полная автоматическая установка
 # Одна команда, один пароль — всё настроится само:
 #   bash deploy.sh
-#   bash deploy.sh --domain tech-blog.ru
+#   bash deploy.sh --domain vpn.example.com     # IP скрыт за доменом
+#   bash deploy.sh --relay-ip 1.2.3.4           # IP скрыт за relay
+#   bash deploy.sh --domain vpn.example.com --relay-ip 1.2.3.4
+#
+# Скрытие IP:
+#   --domain   Подписки и ссылки используют домен вместо IP.
+#              Бесплатно, достаточно для 99% случаев.
+#   --relay-ip IP relay-VPS. Ссылки показывают relay, не настоящий сервер.
+#              Нужен отдельный VPS с iptables NAT forwarding.
 #
 # Креды зашифрованы AES-256-CBC. Вводишь мастер-пароль → готово.
 #=================================================================
@@ -27,6 +35,7 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         --domain)     CUSTOM_DOMAIN="$2"; shift 2 ;;
         --node-name)  CUSTOM_NODE_NAME="$2"; shift 2 ;;
+        --relay-ip)   RELAY_IP="$2"; shift 2 ;;
         *) shift ;;
     esac
 done
@@ -618,10 +627,24 @@ print(obj['uuid'] if isinstance(obj,dict) else obj)
     SHORT_ID3=$(openssl rand -hex 2)
     SHORT_ID4=$(openssl rand -hex 8)
 
+    # Определяем адрес для подписок (relay IP, домен, или прямой IP)
+    DISPLAY_ADDR="${RELAY_IP:-${CUSTOM_DOMAIN:-${SERVER_IP}}}"
+
     # Создаём inbound
+    # Если указан --relay-ip или --domain, добавляем externalProxy
+    # чтобы подписки показывали relay/домен вместо настоящего IP
     INBOUND_JSON=$(python3 -c "
 import json
 sni_list = '${SNI_LIST}'.split(',')
+
+# externalProxy: если указан relay-ip или domain, подписки будут
+# показывать этот адрес вместо настоящего IP сервера
+display_addr = '${DISPLAY_ADDR}'
+server_ip = '${SERVER_IP}'
+ext_proxy = []
+if display_addr != server_ip:
+    ext_proxy = [{'dest': display_addr, 'port': ${VLESS_PORT}, 'forceTls': 'same', 'remark': ''}]
+
 ib = {
     'up':0,'down':0,'total':0,
     'remark':'VLESS-Reality-${SNI}','enable':True,'expiryTime':0,'listen':'',
@@ -633,7 +656,7 @@ ib = {
         'decryption':'none','fallbacks':[]
     }),
     'streamSettings':json.dumps({
-        'network':'tcp','security':'reality','externalProxy':[],
+        'network':'tcp','security':'reality','externalProxy':ext_proxy,
         'realitySettings':{'show':False,'xver':0,'dest':'${DEST}',
             'serverNames':sni_list,'privateKey':'${PRIV_KEY}',
             'minClient':'','maxClient':'','maxTimediff':0,
@@ -686,8 +709,11 @@ else
     PANEL_PROTO="https"
 fi
 
+# Адрес для ссылок: relay IP > домен > прямой IP
+CONNECT_ADDR="${RELAY_IP:-${DISPLAY_HOST}}"
+
 # Генерируем VLESS ссылку (совместима с V2RayTun, v2rayNG, Hiddify, Streisand)
-VLESS_LINK="vless://${CLIENT_UUID}@${SERVER_IP}:${VLESS_PORT}?type=tcp&security=reality&pbk=${PUB_KEY}&fp=${FP}&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#AccessLicense-${NODE_NAME}"
+VLESS_LINK="vless://${CLIENT_UUID}@${CONNECT_ADDR}:${VLESS_PORT}?type=tcp&security=reality&pbk=${PUB_KEY}&fp=${FP}&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#AccessLicense-${NODE_NAME}"
 
 echo ""
 log "============================================"
@@ -695,6 +721,13 @@ log "  ВСЁ ГОТОВО! ДАННЫЕ ДЛЯ ПОДКЛЮЧЕНИЯ"
 log "============================================"
 echo ""
 info "  Server:    ${SERVER_IP}"
+if [[ -n "${RELAY_IP:-}" ]]; then
+    info "  Relay:     ${RELAY_IP} (IP скрыт из ссылок)"
+fi
+if [[ -n "$DOMAIN" ]]; then
+    info "  Domain:    ${DOMAIN} (IP скрыт за доменом)"
+fi
+info "  Клиенты подключаются к: ${CONNECT_ADDR}"
 info "  Node:      ${NODE_NAME}"
 info "  Xray:      ${XRAY_VER}"
 echo ""
@@ -703,6 +736,7 @@ log "  Логин:     ${PANEL_USER}"
 log "  Пароль:    (зашифрован, расшифрован при запуске)"
 echo ""
 log "  VLESS+Reality (создан автоматически):"
+info "    Адрес:       ${CONNECT_ADDR}"
 info "    Порт:        ${VLESS_PORT}"
 info "    UUID:        ${CLIENT_UUID}"
 info "    Public Key:  ${PUB_KEY}"
