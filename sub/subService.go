@@ -31,8 +31,10 @@ type SubService struct {
 // NewSubService creates a new subscription service with the given configuration.
 func NewSubService(showInfo bool, remarkModel string) *SubService {
 	return &SubService{
-		showInfo:    showInfo,
-		remarkModel: remarkModel,
+		showInfo:       showInfo,
+		remarkModel:    remarkModel,
+		inboundService: service.InboundService{},
+		settingService: service.SettingService{},
 	}
 }
 
