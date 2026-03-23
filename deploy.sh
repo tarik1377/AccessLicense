@@ -471,7 +471,7 @@ F2BEOF
 [x-ui-iplimit]
 enabled = true
 filter = x-ui-iplimit
-logpath = /var/log/x-ui/3xipl*.log
+logpath = /var/log/x-ui/ipl*.log
 maxretry = 3
 findtime = 3600
 bantime = 86400

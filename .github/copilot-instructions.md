@@ -108,7 +108,7 @@ func (a *InboundController) getInbounds(c *gin.Context) {
 - Xray binary: `{bin_folder}/xray-{os}-{arch}`
 - Xray config: `{bin_folder}/config.json`
 - GeoIP/GeoSite: `{bin_folder}/geoip.dat`, `geosite.dat`
-- Logs: `{log_folder}/3xipl.log`, `3xipl-banned.log`
+- Logs: `{log_folder}/ipl.log`, `ipl-banned.log`
 
 ### Job Scheduling
 Uses `robfig/cron/v3` for periodic tasks:
@@ -142,7 +142,7 @@ Multi-stage Dockerfile:
 - Set `XUI_DEBUG=true` for detailed logging
 - Check Xray process: `x-ui.sh` script provides menu for status/logs
 - Database inspection: Direct SQLite access to x-ui.db
-- Traffic debugging: Check `3xipl.log` for IP limit tracking
+- Traffic debugging: Check `ipl.log` for IP limit tracking
 - Telegram bot: Logs show bot initialization and command handling
 
 ## Common Gotchas
