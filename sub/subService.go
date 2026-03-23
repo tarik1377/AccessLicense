@@ -975,7 +975,10 @@ func (s *SubService) genRemark(inbound *model.Inbound, email string, extra strin
 // Otherwise, the original fp value is returned as-is.
 func getFingerprint(fp string) string {
 	if fp == "" || fp == "random" {
-		fingerprints := []string{"chrome", "firefox", "safari", "edge"}
+		// Chrome dominates in Russia (~70%), Firefox ~8%, Edge ~3%.
+		// Safari excluded — anomalous on Windows/Linux from Russian IPs.
+		// Weighted toward chrome for realistic distribution.
+		fingerprints := []string{"chrome", "chrome", "chrome", "firefox", "edge"}
 		return fingerprints[random.Num(len(fingerprints))]
 	}
 	return fp
@@ -1161,6 +1164,18 @@ func generateSpiderXForDest(dest string) string {
 			"/api/v1/account",
 			"/tariffs/",
 			"/support/",
+		}
+		return paths[random.Num(len(paths))]
+
+	case strings.HasSuffix(host, "mozilla.net") || strings.HasSuffix(host, "mozilla.org"):
+		paths := []string{
+			"/firefox/releases/" + fmt.Sprintf("%d", 120+random.Num(10)) + ".0/linux-x86_64/ru/firefox-" + fmt.Sprintf("%d", 120+random.Num(10)) + ".0.tar.bz2",
+			"/pub/firefox/releases/" + fmt.Sprintf("%d", 120+random.Num(10)) + ".0/update/linux-x86_64/ru/",
+			"/firefox/nightly/latest-mozilla-central/firefox-" + fmt.Sprintf("%d", 130+random.Num(5)) + ".0a1.en-US.linux-x86_64.tar.bz2",
+			"/addons/api/v5/accounts/account/" + random.Seq(8) + "/?t=" + timestamp,
+			"/addons/api/v5/addons/search/?q=" + random.Seq(6) + "&type=extension&page_size=25",
+			"/lib/v" + fmt.Sprintf("%d", 3+random.Num(3)) + "/firefox-" + random.Seq(4) + ".js",
+			"/ajax/libs/normalize/" + fmt.Sprintf("%d", 8+random.Num(2)) + ".0.1/normalize.min.css",
 		}
 		return paths[random.Num(len(paths))]
 

@@ -13,6 +13,10 @@
         "skipFallback": false
       },
       {
+        "address": "https://common.dot.dns.yandex.net/dns-query",
+        "skipFallback": false
+      },
+      {
         "address": "localhost",
         "skipFallback": true,
         "domains": [
@@ -113,7 +117,7 @@
     }
   },
   "routing": {
-    "domainStrategy": "AsIs",
+    "domainStrategy": "IPIfNonMatch",
     "rules": [
       {
         "type": "field",
@@ -149,7 +153,23 @@
           "domain:premier.one",
           "domain:more.tv",
           "domain:start.ru",
-          "domain:rkn.gov.ru"
+          "domain:rkn.gov.ru",
+          "domain:gosuslugi.ru",
+          "domain:mos.ru",
+          "domain:nalog.gov.ru",
+          "domain:tinkoff.ru",
+          "domain:alfabank.ru",
+          "domain:vtb.ru",
+          "domain:megafon.ru",
+          "domain:mts.ru",
+          "domain:beeline.ru",
+          "domain:rostelecom.ru",
+          "domain:rt.ru",
+          "domain:wildberries.ru",
+          "domain:ozon.ru",
+          "domain:avito.ru",
+          "domain:kinopoisk.ru",
+          "domain:ivi.ru"
         ]
       },
       {
@@ -159,6 +179,11 @@
           "geoip:ru",
           "geoip:private"
         ]
+      },
+      {
+        "type": "field",
+        "port": "53",
+        "outboundTag": "proxy"
       },
       {
         "type": "field",

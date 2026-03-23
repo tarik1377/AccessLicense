@@ -340,9 +340,11 @@ func (s *SubJsonService) genVless(inbound *model.Inbound, streamSettings json_ut
 	outbound := Outbound{}
 	outbound.Protocol = string(inbound.Protocol)
 	outbound.Tag = "proxy"
-	// When XTLS-Vision flow is set, use concurrency=-1 (XUDP only, no TCP mux)
-	// for maximum client compatibility. Full mux is only safe without flow.
-	if client.Flow != "" {
+	// For Reality: XTLS-Vision flow uses concurrency=-1 (XUDP only, no TCP mux).
+	// Reality without flow also uses concurrency=-1 to avoid MUX traffic patterns
+	// that DPI can detect as anomalous for a "normal" TLS connection.
+	isReality := strings.Contains(inbound.StreamSettings, `"reality"`)
+	if client.Flow != "" || isReality {
 		outbound.Mux = json_util.RawMessage(`{"enabled": true, "concurrency": -1, "xudpConcurrency": 16, "xudpProxyUDP443": "allow"}`)
 	} else {
 		outbound.Mux = s.muxConfig()
