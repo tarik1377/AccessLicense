@@ -1209,34 +1209,40 @@ ssl_cert_issue_for_ip() {
         LOGI "Reminder: Let's Encrypt still reaches port 80; forward external port 80 to ${WebPort} for validation."
     fi
 
-    while true; do
+    # Auto-stop services occupying the chosen port before certificate issuance
+    local stopped_services=""
+    if is_port_in_use "${WebPort}"; then
+        LOGI "Port ${WebPort} is in use. Checking for known services to stop temporarily..."
+        for svc in nginx apache2 httpd caddy; do
+            if systemctl is-active --quiet "$svc" 2>/dev/null; then
+                LOGW "Stopping ${svc} temporarily to free port ${WebPort}..."
+                systemctl stop "$svc" 2>/dev/null
+                stopped_services="${stopped_services} ${svc}"
+            fi
+        done
+        sleep 1
         if is_port_in_use "${WebPort}"; then
-            LOGI "Port ${WebPort} is currently in use."
-
-            local alt_port=""
-            read -rp "Enter another port for acme.sh standalone listener (leave empty to abort): " alt_port
-            alt_port="${alt_port// /}"
-            if [[ -z "${alt_port}" ]]; then
-                LOGE "Port ${WebPort} is busy; cannot proceed with issuance."
-                return 1
-            fi
-            if ! [[ "${alt_port}" =~ ^[0-9]+$ ]] || ((alt_port < 1 || alt_port > 65535)); then
-                LOGE "Invalid port provided."
-                return 1
-            fi
-            WebPort="${alt_port}"
-            continue
-        else
-            LOGI "Port ${WebPort} is free and ready for standalone validation."
-            break
+            LOGE "Port ${WebPort} is still in use after stopping known services."
+            for svc in ${stopped_services}; do
+                systemctl start "$svc" 2>/dev/null
+            done
+            LOGE "Please free port ${WebPort} manually and try again."
+            return 1
         fi
-    done
-    
+        LOGI "Port ${WebPort} is now free."
+    else
+        LOGI "Port ${WebPort} is free and ready for standalone validation."
+    fi
+
     # Reload command - restarts panel after renewal
     local reloadCmd="systemctl restart x-ui 2>/dev/null || rc-service x-ui restart 2>/dev/null"
-    
+
     # issue the certificate for IP with shortlived profile
     ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt --force
+    # Pre/post hooks ensure nginx/apache are stopped during renewal too
+    local pre_hook="for s in nginx apache2 httpd caddy; do systemctl stop \$s 2>/dev/null; done; true"
+    local post_hook="for s in nginx apache2 httpd caddy; do systemctl is-enabled --quiet \$s 2>/dev/null && systemctl start \$s 2>/dev/null; done; true"
+
     ~/.acme.sh/acme.sh --issue \
         ${domain_args} \
         --standalone \
@@ -1244,9 +1250,19 @@ ssl_cert_issue_for_ip() {
         --certificate-profile shortlived \
         --days 6 \
         --httpport ${WebPort} \
+        --pre-hook "${pre_hook}" \
+        --post-hook "${post_hook}" \
         --force
-    
-    if [ $? -ne 0 ]; then
+
+    local issue_result=$?
+
+    # Restart any services we stopped, regardless of success/failure
+    for svc in ${stopped_services}; do
+        LOGI "Restarting ${svc}..."
+        systemctl start "$svc" 2>/dev/null
+    done
+
+    if [ $issue_result -ne 0 ]; then
         LOGE "Failed to issue certificate for IP: ${server_ip}"
         LOGE "Make sure port ${WebPort} is open and the server is accessible from the internet"
         # Cleanup acme.sh data for both IPv4 and IPv6 if specified
