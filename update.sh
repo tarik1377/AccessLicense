@@ -271,34 +271,39 @@ setup_ip_certificate() {
         echo -e "${yellow}Reminder: Let's Encrypt still connects on port 80; forward external port 80 to ${WebPort}.${plain}"
     fi
 
-    # Ensure chosen port is available
-    while true; do
+    # Auto-stop services occupying the chosen port before certificate issuance
+    local stopped_services=""
+    if is_port_in_use "${WebPort}"; then
+        echo -e "${yellow}Port ${WebPort} is in use. Checking for known services to stop temporarily...${plain}"
+        for svc in nginx apache2 httpd caddy; do
+            if systemctl is-active --quiet "$svc" 2>/dev/null; then
+                echo -e "${yellow}Stopping ${svc} temporarily to free port ${WebPort}...${plain}"
+                systemctl stop "$svc" 2>/dev/null
+                stopped_services="${stopped_services} ${svc}"
+            fi
+        done
+        sleep 1
         if is_port_in_use "${WebPort}"; then
-            echo -e "${yellow}Port ${WebPort} is currently in use.${plain}"
-
-            local alt_port=""
-            read -rp "Enter another port for acme.sh standalone listener (leave empty to abort): " alt_port
-            alt_port="${alt_port// /}"
-            if [[ -z "${alt_port}" ]]; then
-                echo -e "${red}Port ${WebPort} is busy; cannot proceed.${plain}"
-                return 1
-            fi
-            if ! [[ "${alt_port}" =~ ^[0-9]+$ ]] || ((alt_port < 1 || alt_port > 65535)); then
-                echo -e "${red}Invalid port provided.${plain}"
-                return 1
-            fi
-            WebPort="${alt_port}"
-            continue
-        else
-            echo -e "${green}Port ${WebPort} is free and ready for standalone validation.${plain}"
-            break
+            echo -e "${red}Port ${WebPort} is still in use after stopping known services.${plain}"
+            for svc in ${stopped_services}; do
+                systemctl start "$svc" 2>/dev/null
+            done
+            echo -e "${red}Please free port ${WebPort} manually and try again.${plain}"
+            return 1
         fi
-    done
+        echo -e "${green}Port ${WebPort} is now free.${plain}"
+    else
+        echo -e "${green}Port ${WebPort} is free and ready for standalone validation.${plain}"
+    fi
 
     # Issue certificate with shortlived profile
     echo -e "${green}Issuing IP certificate for ${ipv4}...${plain}"
     ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt --force >/dev/null 2>&1
-    
+
+    # Pre/post hooks ensure nginx/apache are stopped during renewal too
+    local pre_hook="for s in nginx apache2 httpd caddy; do systemctl stop \$s 2>/dev/null; done; true"
+    local post_hook="for s in nginx apache2 httpd caddy; do systemctl is-enabled --quiet \$s 2>/dev/null && systemctl start \$s 2>/dev/null; done; true"
+
     ~/.acme.sh/acme.sh --issue \
         ${domain_args} \
         --standalone \
@@ -306,9 +311,19 @@ setup_ip_certificate() {
         --certificate-profile shortlived \
         --days 6 \
         --httpport ${WebPort} \
+        --pre-hook "${pre_hook}" \
+        --post-hook "${post_hook}" \
         --force
 
-    if [ $? -ne 0 ]; then
+    local issue_result=$?
+
+    # Restart any services we stopped, regardless of success/failure
+    for svc in ${stopped_services}; do
+        echo -e "${green}Restarting ${svc}...${plain}"
+        systemctl start "$svc" 2>/dev/null
+    done
+
+    if [ $issue_result -ne 0 ]; then
         echo -e "${red}Failed to issue IP certificate${plain}"
         echo -e "${yellow}Please ensure port ${WebPort} is reachable (or forwarded from external port 80)${plain}"
         # Cleanup acme.sh data for both IPv4 and IPv6 if specified
