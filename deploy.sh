@@ -595,7 +595,11 @@ if echo "$LOGIN_RESP" | grep -q '"success":true'; then
     PUB_KEY=$(echo "$KEYS_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['obj']['publicKey'])" 2>/dev/null)
 
     UUID_RESP=$(_api GET "/panel/api/server/getNewUUID")
-    CLIENT_UUID=$(echo "$UUID_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['obj'])" 2>/dev/null)
+    CLIENT_UUID=$(echo "$UUID_RESP" | python3 -c "
+import sys,json
+obj=json.load(sys.stdin)['obj']
+print(obj['uuid'] if isinstance(obj,dict) else obj)
+" 2>/dev/null)
     [ -z "$CLIENT_UUID" ] && CLIENT_UUID=$(cat /proc/sys/kernel/random/uuid)
 
     SHORT_ID=$(openssl rand -hex 8)
