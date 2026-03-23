@@ -66,7 +66,6 @@ func NewSubJsonService(fragment string, noises string, mux string, rules string,
 		fragment:         fragment,
 		noises:           noises,
 		mux:              mux,
-		inboundService:   service.InboundService{},
 		SubService:       subService,
 	}
 }
