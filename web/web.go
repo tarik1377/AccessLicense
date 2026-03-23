@@ -225,7 +225,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 			SameSite: http.SameSiteLaxMode,
 		})
 	}
-	engine.Use(sessions.Sessions("3x-ui", store))
+	engine.Use(sessions.Sessions("session_id", store))
 	engine.Use(func(c *gin.Context) {
 		c.Set("base_path", basePath)
 	})

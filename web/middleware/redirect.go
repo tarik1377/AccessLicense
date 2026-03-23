@@ -8,28 +8,27 @@ import (
 )
 
 // RedirectMiddleware returns a Gin middleware that handles URL redirections.
-// It provides backward compatibility by redirecting old '/xui' paths to new '/panel' paths,
-// including API endpoints. The middleware performs permanent redirects (301) for SEO purposes.
+// It normalizes API path casing and blocks legacy /xui paths that could
+// be used to fingerprint the panel.
 func RedirectMiddleware(basePath string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Redirect from old '/xui' path to '/panel'
-		redirects := map[string]string{
-			"panel/API": "panel/api",
-			"xui/API":   "panel/api",
-			"xui":       "panel",
+		path := c.Request.URL.Path
+
+		// Block legacy /xui paths — scanners probe these to identify x-ui panels.
+		// Return 404 instead of redirecting (redirect would confirm panel identity).
+		if strings.HasPrefix(path, basePath+"xui") {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
 		}
 
-		path := c.Request.URL.Path
-		for from, to := range redirects {
-			from, to = basePath+from, basePath+to
-
-			if strings.HasPrefix(path, from) {
-				newPath := to + path[len(from):]
-
-				c.Redirect(http.StatusMovedPermanently, newPath)
-				c.Abort()
-				return
-			}
+		// Normalize API path casing: /panel/API -> /panel/api
+		from := basePath + "panel/API"
+		to := basePath + "panel/api"
+		if strings.HasPrefix(path, from) {
+			newPath := to + path[len(from):]
+			c.Redirect(http.StatusMovedPermanently, newPath)
+			c.Abort()
+			return
 		}
 
 		c.Next()

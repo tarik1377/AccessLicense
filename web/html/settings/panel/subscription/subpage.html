@@ -6,7 +6,7 @@
 <script src="{{ .base_path }}assets/js/util/index.js?{{ .cur_ver }}"></script>
 <script src="{{ .base_path }}assets/qrcode/qrious2.min.js?{{ .cur_ver }}"></script>
 <style>
-    .subscription-page .subscription-link-box {
+    .sv-page .sv-link-box {
         cursor: pointer;
         border-radius: 12px;
         padding: 25px 20px 15px 20px;
@@ -20,24 +20,24 @@
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
 
-    .dark.subscription-page .subscription-link-box {
+    .dark.sv-page .sv-link-box {
         background: rgba(0, 0, 0, 0.2);
         border: 1px solid rgba(255, 255, 255, 0.1);
         color: #fff;
     }
 
-    .dark.subscription-page .subscription-link-box:hover {
+    .dark.sv-page .sv-link-box:hover {
         background: rgba(0, 0, 0, 0.3);
         border-color: rgba(255, 255, 255, 0.2);
     }
 
-    .light.subscription-page .subscription-link-box {
+    .light.sv-page .sv-link-box {
         background: rgba(0, 0, 0, 0.03);
         border: 1px solid rgba(0, 0, 0, 0.08);
         color: rgba(0, 0, 0, 0.85);
     }
 
-    .light.subscription-page .subscription-link-box:hover {
+    .light.sv-page .sv-link-box:hover {
         background: rgba(0, 0, 0, 0.05);
         border-color: rgba(0, 0, 0, 0.14);
     }
@@ -45,11 +45,11 @@
 {{ template "page/head_end" .}}
 
 {{ template "page/body_start" .}}
-<a-layout id="app" v-cloak :class="themeSwitcher.currentTheme + ' subscription-page'">
+<a-layout id="app" v-cloak :class="themeSwitcher.currentTheme + ' sv-page'">
     <a-layout-content class="p-2">
         <a-row type="flex" justify="center" class="mt-2">
             <a-col :xs="24" :sm="22" :md="18" :lg="14" :xl="12">
-                <a-card hoverable class="subscription-card">
+                <a-card hoverable class="sv-card">
                     <template #title>
                         <a-space>
                             <span>{{ i18n "subscription.title" }}</span>
@@ -175,7 +175,7 @@
                                 style="margin-bottom: -10px; position: relative; z-index: 2; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
                                 <span>[[ linkName(link, idx) ]]</span>
                             </a-tag>
-                            <div @click="copy(link)" class="subscription-link-box">
+                            <div @click="copy(link)" class="sv-link-box">
                                 [[ link ]]
                             </div>
                         </div>
@@ -242,12 +242,12 @@
 </a-layout>
 
 <!-- Bootstrap data for external JS -->
-<template id="subscription-data" data-sid="{{ .sId }}" data-sub-url="{{ .subUrl }}" data-subjson-url="{{ .subJsonUrl }}"
+<template id="sv-data" data-sid="{{ .sId }}" data-sub-url="{{ .subUrl }}" data-subjson-url="{{ .subJsonUrl }}"
     data-download="{{ .download }}" data-upload="{{ .upload }}" data-used="{{ .used }}" data-total="{{ .total }}"
     data-remained="{{ .remained }}" data-expire="{{ .expire }}" data-lastonline="{{ .lastOnline }}"
     data-downloadbyte="{{ .downloadByte }}" data-uploadbyte="{{ .uploadByte }}" data-totalbyte="{{ .totalByte }}"
     data-datepicker="{{ .datepicker }}"></template>
-<textarea id="subscription-links" style="display:none">{{ range .result }}{{ . }}
+<textarea id="sv-links" style="display:none">{{ range .result }}{{ . }}
 {{ end }}</textarea>
 
 {{template "component/aThemeSwitch" .}}

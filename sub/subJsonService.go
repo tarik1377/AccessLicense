@@ -315,7 +315,6 @@ func (s *SubJsonService) genVnext(inbound *model.Inbound, streamSettings json_ut
 	usersData := make([]UserVnext, 1)
 
 	usersData[0].ID = client.ID
-	usersData[0].Email = client.Email
 	usersData[0].Security = client.Security
 	vnextData := make([]VnextSetting, 1)
 	vnextData[0] = VnextSetting{
@@ -431,7 +430,6 @@ type VnextSetting struct {
 
 type UserVnext struct {
 	ID       string `json:"id"`
-	Email    string `json:"email,omitempty"`
 	Security string `json:"security,omitempty"`
 }
 

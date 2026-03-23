@@ -1,8 +1,8 @@
 (function () {
-  // Vue app for Subscription page
-  const el = document.getElementById('subscription-data');
+  // Page initialization
+  const el = document.getElementById('sv-data');
   if (!el) return;
-  const textarea = document.getElementById('subscription-links');
+  const textarea = document.getElementById('sv-links');
   const rawLinks = (textarea?.value || '').split('\n').filter(Boolean);
 
   const data = {
@@ -96,7 +96,7 @@
     },
     async mounted() {
       this.lang = LanguageManager.getLanguage();
-      const tpl = document.getElementById('subscription-data');
+      const tpl = document.getElementById('sv-data');
       const sj = tpl ? tpl.getAttribute('data-subjson-url') : '';
       if (sj) this.app.subJsonUrl = sj;
       drawQR(this.app.subUrl);
