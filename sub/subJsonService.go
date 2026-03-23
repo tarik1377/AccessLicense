@@ -340,7 +340,13 @@ func (s *SubJsonService) genVless(inbound *model.Inbound, streamSettings json_ut
 	outbound := Outbound{}
 	outbound.Protocol = string(inbound.Protocol)
 	outbound.Tag = "proxy"
-	outbound.Mux = s.muxConfig()
+	// When XTLS-Vision flow is set, use concurrency=-1 (XUDP only, no TCP mux)
+	// for maximum client compatibility. Full mux is only safe without flow.
+	if client.Flow != "" {
+		outbound.Mux = json_util.RawMessage(`{"enabled": true, "concurrency": -1, "xudpConcurrency": 16, "xudpProxyUDP443": "allow"}`)
+	} else {
+		outbound.Mux = s.muxConfig()
+	}
 	outbound.StreamSettings = streamSettings
 	settings := make(map[string]any)
 	settings["address"] = inbound.Listen

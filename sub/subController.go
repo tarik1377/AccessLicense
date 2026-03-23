@@ -235,6 +235,8 @@ func (a *SUBController) subJsons(c *gin.Context) {
 		}
 		a.ApplyCommonHeaders(c, header, a.updateInterval, a.subTitle, a.subSupportUrl, profileUrl, a.subAnnounce, a.subEnableRouting, a.subRoutingRules)
 
+		// Override Content-Type for JSON subscriptions so clients parse correctly
+		c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 		c.String(200, jsonSub)
 	}
 }
@@ -282,6 +284,10 @@ func (a *SUBController) ApplyCommonHeaders(
 	if profileRoutingRules != "" {
 		c.Writer.Header().Set("Routing", profileRoutingRules)
 	}
+
+	// Prevent ISP/CDN/proxy caching of subscription data
+	c.Writer.Header().Set("Cache-Control", "no-store, no-cache, private")
+	c.Writer.Header().Set("Pragma", "no-cache")
 
 	// CORS headers for client apps that fetch via HTTP
 	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
