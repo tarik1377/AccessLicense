@@ -22,7 +22,7 @@ info() { echo -e "${CYAN}[i]${NC} $1"; }
 err()  { echo -e "${RED}[x]${NC} $1"; exit 1; }
 
 # Тот же зашифрованный blob что и в deploy.sh
-_ENCRYPTED_CREDS="U2FsdGVkX19wZuuA96zkeAsk+HMAJQcPFmYKGugTzKWsfQQ6mvLqR8Vu1jqRfzcyDGjF6kqVsEmgnJ8jnekodm9rgro859oLkfV4yudz0xyNkVCk8Ua3GQAKd30haDNxVwaVc4Tgu3ODe1M+XQItrW+5bn5bXkZm/xVE4su2BIqGyv/8l6R1T8XxyKr+k002dJASghyTNJIMuPtgWqBn+3k5bMQ5+QDk5D8g/Hm1PpFfrOwqhWxJ6ow0pA1HfZL2/uICos9HC/XOJ95iUIxx2RTLZEBz9/rr4QpR/x1wlLQdEyV6bOVWUeZN9X7yvqFg"
+_ENCRYPTED_CREDS="U2FsdGVkX19TtWfu7yLluyWHeNr3txR3iPhCmMIqGoEjyoEO1ZVvpYvDn/baglKzBku9OenS0aL4p1oYjaplfkPb/44sLasAHdkzVK7PM9cOHS1Q+PazGPAlf2ZCJj3V2/L6ZEW5KElVouL0jX2O8aqNRTiS1JbQ1LQUD6N0MvIq938L+t5iLfqkJeDo4FXazI7t6JwqFOadxg8wmFzcKLGK1lpfSktlWgB6yaVSHRTBe/bw2jvYSgZ7lOgzVOEuRnh5KKVcBFU/ZU/yyNg1ubSJ1Tn+W40EYzo2aTgy/9nzeCS7f71vpPfNAdQmPICu"
 
 echo ""
 read -rsp "Мастер-пароль: " MASTER_PASS
