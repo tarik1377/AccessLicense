@@ -1,52 +1,15 @@
 #!/bin/bash
 
 #=================================================================
-# AccessLicense Deploy — быстрая установка из GitHub Releases
-# Без Go, без сборки — скачивает готовый бинарник за секунды
-# + настройка панели, nginx, firewall, sysctl, VLESS+Reality
-# Использование:
+# AccessLicense Deploy — полная автоматическая установка
+# Одна команда, один пароль — всё настроится само:
 #   bash deploy.sh
-#   DOMAIN=tech-blog.ru PANEL_USER=admin bash deploy.sh
-#   bash deploy.sh --domain tech-blog.ru --user admin --pass MyS3cret
+#   bash deploy.sh --domain tech-blog.ru
+#
+# Креды зашифрованы AES-256-CBC. Вводишь мастер-пароль → готово.
 #=================================================================
 
 set -e
-
-# ===================== ПАРСИНГ АРГУМЕНТОВ =====================
-# Параметры можно передать через ENV или аргументы командной строки.
-# Аргументы имеют приоритет над ENV, ENV — над дефолтами.
-# Примеры:
-#   DOMAIN=tech-blog.ru PANEL_USER=admin bash deploy.sh
-#   bash deploy.sh --domain tech-blog.ru --user admin
-
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --domain)     CUSTOM_DOMAIN="$2"; shift 2 ;;
-        --user)       CUSTOM_USER="$2"; shift 2 ;;
-        --pass)       CUSTOM_PASS="$2"; shift 2 ;;
-        --panel-port) CUSTOM_PANEL_PORT="$2"; shift 2 ;;
-        --sub-port)   CUSTOM_SUB_PORT="$2"; shift 2 ;;
-        --node-name)  CUSTOM_NODE_NAME="$2"; shift 2 ;;
-        *) shift ;;
-    esac
-done
-# ==============================================================
-
-# ===================== КОНФИГУРАЦИЯ =====================
-# Приоритет: аргумент (--flag) > ENV переменная > дефолт
-PANEL_PORT=${CUSTOM_PANEL_PORT:-${PANEL_PORT_ENV:-9443}}
-SUB_PORT=${CUSTOM_SUB_PORT:-${SUB_PORT_ENV:-9444}}
-PANEL_USER=${CUSTOM_USER:-${PANEL_USER_ENV:-"admin"}}
-PANEL_PASS=${CUSTOM_PASS:-${PANEL_PASS_ENV:-$(openssl rand -base64 16)}}
-PANEL_PATH="/secretpanel/"
-SUB_PATH="/feed/"
-SUB_JSON_PATH="/config/"
-XUI_FOLDER="/usr/local/x-ui"
-DB_PATH="/etc/x-ui/x-ui.db"
-GITHUB_REPO="tarik1377/AccessLicense"
-NODE_NAME=${CUSTOM_NODE_NAME:-"node-$(hostname -s)"}
-DOMAIN=${CUSTOM_DOMAIN:-""}
-# ========================================================
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -58,6 +21,52 @@ log()  { echo -e "${GREEN}[+]${NC} $1"; }
 warn() { echo -e "${YELLOW}[!]${NC} $1"; }
 info() { echo -e "${CYAN}[i]${NC} $1"; }
 err()  { echo -e "${RED}[x]${NC} $1"; exit 1; }
+
+# ===================== ПАРСИНГ АРГУМЕНТОВ =====================
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --domain)     CUSTOM_DOMAIN="$2"; shift 2 ;;
+        --node-name)  CUSTOM_NODE_NAME="$2"; shift 2 ;;
+        *) shift ;;
+    esac
+done
+
+# ===================== МАСТЕР-ПАРОЛЬ → РАСШИФРОВКА =====================
+# Все креды зашифрованы AES-256-CBC + PBKDF2 (100k итераций)
+# В гите лежит только зашифрованный blob — plaintext нигде не хранится
+_ENCRYPTED_CREDS="U2FsdGVkX19TtWfu7yLluyWHeNr3txR3iPhCmMIqGoEjyoEO1ZVvpYvDn/baglKzBku9OenS0aL4p1oYjaplfkPb/44sLasAHdkzVK7PM9cOHS1Q+PazGPAlf2ZCJj3V2/L6ZEW5KElVouL0jX2O8aqNRTiS1JbQ1LQUD6N0MvIq938L+t5iLfqkJeDo4FXazI7t6JwqFOadxg8wmFzcKLGK1lpfSktlWgB6yaVSHRTBe/bw2jvYSgZ7lOgzVOEuRnh5KKVcBFU/ZU/yyNg1ubSJ1Tn+W40EYzo2aTgy/9nzeCS7f71vpPfNAdQmPICu"
+
+echo ""
+log "AccessLicense Deploy"
+echo ""
+read -rsp "  Мастер-пароль: " MASTER_PASS
+echo ""
+
+_DECRYPTED=$(echo "$_ENCRYPTED_CREDS" | openssl enc -aes-256-cbc -pbkdf2 -iter 100000 \
+    -d -salt -pass "pass:${MASTER_PASS}" -base64 -A 2>/dev/null) \
+    || err "Неверный мастер-пароль!"
+
+# Парсим JSON с кредами
+PANEL_USER=$(echo "$_DECRYPTED" | python3 -c "import sys,json; print(json.load(sys.stdin)['user'])")
+PANEL_PASS=$(echo "$_DECRYPTED" | python3 -c "import sys,json; print(json.load(sys.stdin)['pass'])")
+PANEL_PORT=$(echo "$_DECRYPTED" | python3 -c "import sys,json; print(json.load(sys.stdin)['panel_port'])")
+PANEL_PATH=$(echo "$_DECRYPTED" | python3 -c "import sys,json; print(json.load(sys.stdin)['panel_path'])")
+SUB_PORT=$(echo "$_DECRYPTED" | python3 -c "import sys,json; print(json.load(sys.stdin)['sub_port'])")
+SUB_PATH=$(echo "$_DECRYPTED" | python3 -c "import sys,json; print(json.load(sys.stdin)['sub_path'])")
+SUB_JSON_PATH=$(echo "$_DECRYPTED" | python3 -c "import sys,json; print(json.load(sys.stdin)['sub_json_path'])")
+WEB_BASE=$(echo "$_DECRYPTED" | python3 -c "import sys,json; print(json.load(sys.stdin)['web_base'])")
+
+# Очищаем пароль из памяти
+unset MASTER_PASS _DECRYPTED _ENCRYPTED_CREDS
+
+log "Креды расшифрованы"
+
+# ===================== КОНФИГУРАЦИЯ =====================
+XUI_FOLDER="/usr/local/x-ui"
+DB_PATH="/etc/x-ui/x-ui.db"
+GITHUB_REPO="tarik1377/AccessLicense"
+NODE_NAME=${CUSTOM_NODE_NAME:-"node-$(hostname -s)"}
+DOMAIN=${CUSTOM_DOMAIN:-""}
 
 # Проверка root
 [[ $EUID -ne 0 ]] && err "Запусти от root: sudo bash deploy.sh"
@@ -87,43 +96,24 @@ elif command -v yum &>/dev/null; then
     yum install -y -q fail2ban sqlite nginx >/dev/null 2>&1
 fi
 
-# 3. Останавливаем для настройки БД
+# 3. Настраиваем панель через x-ui setting + БД
+log "Настраиваю панель..."
 systemctl stop x-ui 2>/dev/null || true
 sleep 1
 
-# 4. Настраиваем панель через БД
-log "Настраиваю панель..."
+# Логин/пароль/порт/путь — через CLI
+${XUI_FOLDER}/x-ui setting -username "${PANEL_USER}" -password "${PANEL_PASS}" -resetTwoFactor false >/dev/null 2>&1
+${XUI_FOLDER}/x-ui setting -port "${PANEL_PORT}" >/dev/null 2>&1
+${XUI_FOLDER}/x-ui setting -webBasePath "${WEB_BASE}" >/dev/null 2>&1
+log "x-ui setting: логин/пароль/порт/путь — установлены"
 
-# Проверяем что БД создалась
+# Подписки и расширенные настройки — через БД (CLI не поддерживает)
 if [ ! -f "${DB_PATH}" ]; then
     FOUND_DB=$(find /etc/x-ui -name "*.db" -type f 2>/dev/null | head -1)
-    if [ -n "${FOUND_DB}" ]; then
-        DB_PATH="${FOUND_DB}"
-        warn "БД: ${DB_PATH}"
-    else
-        err "БД не создалась! Проверь: journalctl -u x-ui -n 50"
-    fi
+    [ -n "${FOUND_DB}" ] && DB_PATH="${FOUND_DB}" || err "БД не создалась!"
 fi
 
-# Пароль — bcrypt через python3
-HASHED_PASS=$(python3 -c "
-try:
-    import bcrypt
-    print(bcrypt.hashpw(b'${PANEL_PASS}', bcrypt.gensalt()).decode())
-except ImportError:
-    print('${PANEL_PASS}')
-" 2>/dev/null || echo "${PANEL_PASS}")
-
 sqlite3 "${DB_PATH}" << SQLEOF
--- Логин/пароль
-UPDATE users SET username='${PANEL_USER}', password='${HASHED_PASS}' WHERE id=1;
-
--- Порт панели
-INSERT OR REPLACE INTO settings (id, key, value) VALUES
-  ((SELECT id FROM settings WHERE key='webPort'), 'webPort', '${PANEL_PORT}');
-INSERT OR REPLACE INTO settings (id, key, value) VALUES
-  ((SELECT id FROM settings WHERE key='webBasePath'), 'webBasePath', '${PANEL_PATH}');
-
 -- Подписки
 INSERT OR REPLACE INTO settings (id, key, value) VALUES
   ((SELECT id FROM settings WHERE key='subPort'), 'subPort', '${SUB_PORT}');
@@ -144,86 +134,20 @@ INSERT OR REPLACE INTO settings (id, key, value) VALUES
 INSERT OR REPLACE INTO settings (id, key, value) VALUES
   ((SELECT id FROM settings WHERE key='ipLimitEnable'), 'ipLimitEnable', 'true');
 
--- Xray шаблон: оптимизирован для VLESS+Reality скорости
+-- Xray шаблон: оптимизирован для VLESS+Reality
 INSERT OR REPLACE INTO settings (id, key, value) VALUES
   ((SELECT id FROM settings WHERE key='xrayTemplateConfig'), 'xrayTemplateConfig', '{
-  "log": {
-    "loglevel": "warning",
-    "access": "/var/log/x-ui/access.log",
-    "error": "/var/log/x-ui/error.log"
-  },
-  "api": {
-    "services": ["HandlerService", "LoggerService", "StatsService"],
-    "tag": "api"
-  },
+  "log": {"loglevel":"warning","access":"/var/log/x-ui/access.log","error":"/var/log/x-ui/error.log"},
+  "api": {"services":["HandlerService","LoggerService","StatsService"],"tag":"api"},
   "stats": {},
-  "policy": {
-    "levels": {
-      "0": {
-        "handshake": 2,
-        "connIdle": 120,
-        "uplinkOnly": 1,
-        "downlinkOnly": 1,
-        "statsUserUplink": true,
-        "statsUserDownlink": true,
-        "bufferSize": 4
-      }
-    },
-    "system": {
-      "statsInboundUplink": true,
-      "statsInboundDownlink": true,
-      "statsOutboundUplink": true,
-      "statsOutboundDownlink": true
-    }
-  },
-  "inbounds": [
-    {
-      "listen": "127.0.0.1",
-      "port": 62789,
-      "protocol": "dokodemo-door",
-      "settings": { "address": "127.0.0.1" },
-      "tag": "api",
-      "sniffing": null
-    }
-  ],
-  "outbounds": [
-    {
-      "protocol": "freedom",
-      "settings": {
-        "domainStrategy": "AsIs"
-      },
-      "tag": "direct"
-    },
-    {
-      "protocol": "blackhole",
-      "settings": {},
-      "tag": "blocked"
-    }
-  ],
-  "routing": {
-    "domainStrategy": "AsIs",
-    "rules": [
-      {
-        "inboundTag": ["api"],
-        "outboundTag": "api",
-        "type": "field"
-      },
-      {
-        "ip": ["geoip:private"],
-        "outboundTag": "blocked",
-        "type": "field"
-      },
-      {
-        "domain": ["geosite:category-ads-all"],
-        "outboundTag": "blocked",
-        "type": "field"
-      }
-    ]
-  }
+  "policy": {"levels":{"0":{"handshake":2,"connIdle":120,"uplinkOnly":1,"downlinkOnly":1,"statsUserUplink":true,"statsUserDownlink":true,"bufferSize":4}},"system":{"statsInboundUplink":true,"statsInboundDownlink":true,"statsOutboundUplink":true,"statsOutboundDownlink":true}},
+  "inbounds": [{"listen":"127.0.0.1","port":62789,"protocol":"dokodemo-door","settings":{"address":"127.0.0.1"},"tag":"api","sniffing":null}],
+  "outbounds": [{"protocol":"freedom","settings":{"domainStrategy":"AsIs"},"tag":"direct"},{"protocol":"blackhole","settings":{},"tag":"blocked"}],
+  "routing": {"domainStrategy":"AsIs","rules":[{"inboundTag":["api"],"outboundTag":"api","type":"field"},{"ip":["geoip:private"],"outboundTag":"blocked","type":"field"},{"domain":["geosite:category-ads-all"],"outboundTag":"blocked","type":"field"}]}
 }');
 SQLEOF
 
-log "Панель настроена"
+log "Панель настроена (x-ui setting + БД)"
 
 # 5. Nginx — реальный сайт-прикрытие (статика, без proxy_pass)
 log "Генерирую сайт-прикрытие и настраиваю nginx..."
@@ -634,12 +558,103 @@ F2BJEOF
 
 systemctl restart fail2ban 2>/dev/null || true
 
-# 9. Запускаем с нашими настройками
+# 9. Запускаем панель
 log "Запускаю AccessLicense..."
 systemctl restart x-ui
 sleep 3
 
-# 10. Архитектура для вывода
+if ! systemctl is-active --quiet x-ui; then
+    err "Панель не запустилась! Проверь: journalctl -u x-ui -n 50"
+fi
+
+# 10. Создаём VLESS+Reality автоматически через API
+log "Создаю VLESS+Reality inbound автоматически..."
+
+PANEL_BASE_URL="https://127.0.0.1:${PANEL_PORT}${WEB_BASE}"
+COOKIES_FILE=$(mktemp)
+
+# Логинимся в API
+LOGIN_RESP=$(curl -sk -c "$COOKIES_FILE" -X POST "${PANEL_BASE_URL}/login" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "username=${PANEL_USER}&password=${PANEL_PASS}" 2>/dev/null)
+
+if echo "$LOGIN_RESP" | grep -q '"success":true'; then
+    log "API: залогинился"
+
+    _api() {
+        local method="$1" endpoint="$2" data="$3"
+        local args=(-sk -b "$COOKIES_FILE" -c "$COOKIES_FILE" -H "Content-Type: application/json")
+        [ "$method" = "POST" ] && [ -n "$data" ] && args+=(-X POST -d "$data")
+        [ "$method" = "POST" ] && [ -z "$data" ] && args+=(-X POST)
+        curl "${args[@]}" "${PANEL_BASE_URL}${endpoint}" 2>/dev/null
+    }
+
+    # Генерируем ключи
+    KEYS_RESP=$(_api GET "/panel/api/server/getNewX25519Cert")
+    PRIV_KEY=$(echo "$KEYS_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['obj']['privateKey'])" 2>/dev/null)
+    PUB_KEY=$(echo "$KEYS_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['obj']['publicKey'])" 2>/dev/null)
+
+    UUID_RESP=$(_api GET "/panel/api/server/getNewUUID")
+    CLIENT_UUID=$(echo "$UUID_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['obj'])" 2>/dev/null)
+    [ -z "$CLIENT_UUID" ] && CLIENT_UUID=$(cat /proc/sys/kernel/random/uuid)
+
+    SHORT_ID=$(openssl rand -hex 8)
+    SUB_ID=$(openssl rand -hex 8)
+
+    VLESS_PORT=443
+    DEST="yandex.ru:443"
+    SNI="yandex.ru"
+    FP="chrome"
+
+    # Создаём inbound
+    INBOUND_JSON=$(python3 -c "
+import json
+ib = {
+    'up':0,'down':0,'total':0,
+    'remark':'VLESS-Reality-${SNI}','enable':True,'expiryTime':0,'listen':'',
+    'port':${VLESS_PORT},'protocol':'vless',
+    'settings':json.dumps({
+        'clients':[{'id':'${CLIENT_UUID}','flow':'xtls-rprx-vision','email':'main-user',
+            'limitIp':3,'totalGB':0,'expiryTime':0,'enable':True,'tgId':'',
+            'subId':'${SUB_ID}','comment':'Main'}],
+        'decryption':'none','fallbacks':[]
+    }),
+    'streamSettings':json.dumps({
+        'network':'tcp','security':'reality','externalProxy':[],
+        'realitySettings':{'show':False,'xver':0,'dest':'${DEST}',
+            'serverNames':['${SNI}'],'privateKey':'${PRIV_KEY}',
+            'minClient':'','maxClient':'','maxTimediff':0,
+            'shortIds':['${SHORT_ID}','','0123456789abcdef'],
+            'settings':{'publicKey':'${PUB_KEY}','fingerprint':'${FP}','serverName':''}},
+        'tcpSettings':{'acceptProxyProtocol':False,'header':{'type':'none'}}
+    }),
+    'sniffing':json.dumps({'enabled':True,'destOverride':['http','tls','quic','fakedns'],'metadataOnly':False,'routeOnly':False}),
+    'allocate':json.dumps({'strategy':'always','refresh':5,'concurrency':3})
+}
+print(json.dumps(ib))
+")
+
+    ADD_RESP=$(_api POST "/panel/api/inbounds/add" "$INBOUND_JSON")
+    if echo "$ADD_RESP" | grep -q '"success":true'; then
+        log "VLESS+Reality создан на порту ${VLESS_PORT}!"
+    else
+        warn "Ошибка создания inbound (порт ${VLESS_PORT} занят?): $(echo "$ADD_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('msg',''))" 2>/dev/null)"
+    fi
+
+    rm -f "$COOKIES_FILE"
+else
+    warn "Не удалось залогиниться в API — VLESS+Reality нужно создать вручную через панель"
+    PRIV_KEY="(не сгенерирован)"
+    PUB_KEY="(не сгенерирован)"
+    CLIENT_UUID="(не сгенерирован)"
+    SHORT_ID="(не сгенерирован)"
+    SUB_ID="(не сгенерирован)"
+    VLESS_PORT=443
+    SNI="yandex.ru"
+    FP="chrome"
+fi
+
+# 11. Итог
 ARCH=$(uname -m)
 case "$ARCH" in
     x86_64)  PLATFORM="amd64" ;;
@@ -648,76 +663,44 @@ case "$ARCH" in
     *)       PLATFORM="$ARCH" ;;
 esac
 
-# 11. Проверка
-if systemctl is-active --quiet x-ui; then
-    XRAY_VER_ACTUAL=$(${XUI_FOLDER}/bin/xray-linux-${PLATFORM} -version 2>/dev/null | head -1 | awk '{print $2}' || echo "latest")
+XRAY_VER=$(${XUI_FOLDER}/bin/xray-linux-${PLATFORM} -version 2>/dev/null | head -1 | awk '{print $2}' || echo "latest")
 
-    # Определяем адрес для вывода (домен или IP)
-    if [ -n "$DOMAIN" ]; then
-        DISPLAY_HOST="${DOMAIN}"
-        PANEL_PROTO="https"
-    else
-        DISPLAY_HOST="${SERVER_IP}"
-        PANEL_PROTO="http"
-    fi
-
-    echo ""
-    log "============================================"
-    log "  ДАННЫЕ ДЛЯ ПОДКЛЮЧЕНИЯ (СОХРАНИ!)"
-    log "============================================"
-    echo ""
-    info "  Server:    ${SERVER_IP}"
-    info "  Node:      ${NODE_NAME}"
-    if [ -n "$DOMAIN" ]; then
-    info "  Domain:    ${DOMAIN}"
-    fi
-    info "  Xray:      ${XRAY_VER_ACTUAL}"
-    info "  Arch:      ${PLATFORM}"
-    echo ""
-    log "  Панель:    ${PANEL_PROTO}://${DISPLAY_HOST}:${PANEL_PORT}${PANEL_PATH}"
-    log "  Логин:     ${PANEL_USER}"
-    log "  Пароль:    ${PANEL_PASS}"
-    warn "  ↑ СОХРАНИ ПАРОЛЬ! Если он сгенерирован — повторно его не получить."
-    echo ""
-    log "  Подписки:"
-    log "    Links:   ${PANEL_PROTO}://${DISPLAY_HOST}:${SUB_PORT}${SUB_PATH}<subId>"
-    log "    JSON:    ${PANEL_PROTO}://${DISPLAY_HOST}:${SUB_PORT}${SUB_JSON_PATH}<subId>"
-    echo ""
-    log "  Nginx:     порт 80 → статический сайт-прикрытие (CloudVantage)"
-    if [ -n "$DOMAIN" ]; then
-    log "  SSL:       Let's Encrypt (auto-renew)"
-    fi
-    echo ""
-    log "  ═══ VLESS+Reality (максимальная скорость) ═══"
-    log "    1. Панель → Inbounds → Add Inbound"
-    log "    2. Protocol: VLESS"
-    log "    3. Port: 443"
-    log "    4. Transport: TCP"
-    log "    5. Security: Reality"
-    log "    6. Target (dest): yandex.ru:443"
-    log "    7. SNI (serverNames): yandex.ru"
-    log "    8. uTLS (fingerprint): chrome"
-    log "    9. Client → Flow: xtls-rprx-vision"
-    log "   10. Нажми x-ui x25519 для генерации ключей"
-    log "   11. ML-DSA-65: нажми Get New mldsa65 Seed (пост-квантовая защита)"
-    echo ""
-    info "  Белый список dest (для РФ облаков):"
-    info "    - yandex.ru — гарантированно в белом списке ТСПУ"
-    info "    - storage.yandexcloud.net — для Yandex Cloud (ГБ данных = норма)"
-    info "    - vk.com — соцсеть, белый список"
-    info "    - mail.ru — почта, долгие соединения"
-    info "    - web.max.ru — МТС/Макс, телеком"
-    echo ""
-    log "  Оптимизации скорости (применены):"
-    log "    - BBR congestion control"
-    log "    - TCP Fast Open (client+server)"
-    log "    - Буферы 64MB (для 1Gbps+)"
-    log "    - Отключен slow start after idle"
-    log "    - MTU Probing"
-    log "    - conntrack оптимизирован"
-    echo ""
-    log "  Управление: x-ui"
-    log "============================================"
+if [ -n "$DOMAIN" ]; then
+    DISPLAY_HOST="${DOMAIN}"
+    PANEL_PROTO="https"
 else
-    err "Панель не запустилась! Проверь: journalctl -u x-ui -n 50"
+    DISPLAY_HOST="${SERVER_IP}"
+    PANEL_PROTO="https"
 fi
+
+echo ""
+log "============================================"
+log "  ВСЁ ГОТОВО! ДАННЫЕ ДЛЯ ПОДКЛЮЧЕНИЯ"
+log "============================================"
+echo ""
+info "  Server:    ${SERVER_IP}"
+info "  Node:      ${NODE_NAME}"
+info "  Xray:      ${XRAY_VER}"
+echo ""
+log "  Панель:    ${PANEL_PROTO}://${DISPLAY_HOST}:${PANEL_PORT}${PANEL_PATH}"
+log "  Логин:     ${PANEL_USER}"
+log "  Пароль:    (зашифрован, расшифрован при запуске)"
+echo ""
+log "  VLESS+Reality (создан автоматически):"
+info "    Порт:        ${VLESS_PORT}"
+info "    UUID:        ${CLIENT_UUID}"
+info "    Public Key:  ${PUB_KEY}"
+info "    Short ID:    ${SHORT_ID}"
+info "    SNI:         ${SNI}"
+info "    Fingerprint: ${FP}"
+info "    Flow:        xtls-rprx-vision"
+info "    Лимит:       3 устройства"
+echo ""
+log "  Подписки:"
+info "    ${PANEL_PROTO}://${DISPLAY_HOST}:${SUB_PORT}${SUB_PATH}${SUB_ID}"
+info "    ${PANEL_PROTO}://${DISPLAY_HOST}:${SUB_PORT}${SUB_JSON_PATH}${SUB_ID}"
+echo ""
+log "  Nginx:     порт 80 → сайт-прикрытие (CloudVantage)"
+echo ""
+log "  Мониторинг:  x-ui          (меню управления)"
+log "============================================"
