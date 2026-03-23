@@ -66,19 +66,19 @@
         "domainStrategy": "AsIs",
         "fragment": {
           "packets": "tlshello",
-          "length": "10-30",
-          "interval": "10-20"
+          "length": "40-100",
+          "interval": "30-80"
         },
         "noises": [
           {
             "type": "rand",
-            "packet": "10-20",
-            "delay": "10-16"
+            "packet": "200-400",
+            "delay": "50-150"
           },
           {
             "type": "str",
-            "packet": "GET / HTTP/1.1\r\nHost: www.google.com\r\nAccept: */*\r\n\r\n",
-            "delay": "1-5"
+            "packet": "GET /complete/search?q=weather&cp=7&client=gws-wiz&xssi=t HTTP/2\r\nHost: www.google.com\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36\r\nAccept: */*\r\nAccept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7\r\nSec-Fetch-Dest: empty\r\nSec-Fetch-Mode: cors\r\nSec-Fetch-Site: same-origin\r\n\r\n",
+            "delay": "50-200"
           }
         ]
       }

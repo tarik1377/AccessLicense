@@ -137,7 +137,7 @@ INSERT OR REPLACE INTO settings (id, key, value) VALUES
 -- Xray шаблон: оптимизирован для VLESS+Reality + обход белых списков
 INSERT OR REPLACE INTO settings (id, key, value) VALUES
   ((SELECT id FROM settings WHERE key='xrayTemplateConfig'), 'xrayTemplateConfig', '{
-  "log": {"loglevel":"warning","access":"/var/log/x-ui/access.log","error":"/var/log/x-ui/error.log"},
+  "log": {"loglevel":"warning","access":"none","error":"/var/log/x-ui/error.log"},
   "api": {"services":["HandlerService","LoggerService","StatsService"],"tag":"api"},
   "stats": {},
   "policy": {"levels":{"0":{"handshake":4,"connIdle":300,"uplinkOnly":1,"downlinkOnly":1,"statsUserUplink":true,"statsUserDownlink":true,"bufferSize":0}},"system":{"statsInboundUplink":true,"statsInboundDownlink":true,"statsOutboundUplink":true,"statsOutboundDownlink":true}},
@@ -149,7 +149,7 @@ SQLEOF
 
 log "Панель настроена (x-ui setting + БД)"
 
-# 5. Nginx — реальный сайт-прикрытие (статика, без proxy_pass)
+# 4. Nginx — реальный сайт-прикрытие (статика, без proxy_pass)
 log "Генерирую сайт-прикрытие и настраиваю nginx..."
 if command -v nginx &>/dev/null; then
     mkdir -p /var/www/cover-site
@@ -456,6 +456,41 @@ NGXEOF
     fi
 fi
 
+# 5. Fail2ban — защита от брутфорса и превышения IP-лимитов
+log "Настраиваю fail2ban..."
+if command -v fail2ban-client &>/dev/null; then
+    # Фильтр для IP-лимитов x-ui
+    cat > /etc/fail2ban/filter.d/x-ui-iplimit.conf << 'F2BEOF'
+[Definition]
+failregex = ^\[LIMIT_IP\].*Disconnecting OLD IP = <HOST>
+ignoreregex =
+F2BEOF
+
+    # Jail: блокировка по IP-лимитам
+    cat > /etc/fail2ban/jail.d/x-ui-iplimit.conf << 'F2BEOF'
+[x-ui-iplimit]
+enabled = true
+filter = x-ui-iplimit
+logpath = /var/log/x-ui/3xipl*.log
+maxretry = 3
+findtime = 3600
+bantime = 86400
+banaction = ufw
+F2BEOF
+
+    # Jail: защита SSH от брутфорса
+    cat > /etc/fail2ban/jail.d/sshd.conf << 'F2BEOF'
+[sshd]
+enabled = true
+maxretry = 5
+findtime = 600
+bantime = 3600
+F2BEOF
+
+    systemctl restart fail2ban >/dev/null 2>&1
+    log "Fail2ban: x-ui-iplimit + sshd jails настроены"
+fi
+
 # 6. Firewall
 log "Настраиваю firewall..."
 if command -v ufw &>/dev/null; then
@@ -543,31 +578,9 @@ SYSEOF
 sysctl -p /etc/sysctl.d/99-accesslicense.conf >/dev/null 2>&1
 log "Sysctl: BBR + буферы 64MB + fast open + оптимизация"
 
-# 8. Fail2ban
-log "Настраиваю Fail2ban..."
-mkdir -p /etc/fail2ban/filter.d /etc/fail2ban/jail.d
+# Fail2ban уже настроен в шаге 6
 
-cat > /etc/fail2ban/filter.d/x-ui-iplimit.conf << 'F2BEOF'
-[Definition]
-datepattern = ^%%Y/%%m/%%d %%H:%%M:%%S
-failregex   = \[LIMIT_IP\].*Disconnecting OLD IP = <HOST>
-ignoreregex =
-F2BEOF
-
-cat > /etc/fail2ban/jail.d/x-ui-iplimit.conf << 'F2BJEOF'
-[x-ui-iplimit]
-enabled  = true
-filter   = x-ui-iplimit
-port     = http,https
-logpath  = /var/log/x-ui/3xipl.log
-maxretry = 3
-findtime = 120
-bantime  = 600
-F2BJEOF
-
-systemctl restart fail2ban 2>/dev/null || true
-
-# 9. Запускаем панель
+# 8. Запускаем панель
 log "Запускаю AccessLicense..."
 systemctl restart x-ui
 sleep 3
@@ -576,7 +589,7 @@ if ! systemctl is-active --quiet x-ui; then
     err "Панель не запустилась! Проверь: journalctl -u x-ui -n 50"
 fi
 
-# 10. Создаём VLESS+Reality автоматически через API
+# 9. Создаём VLESS+Reality автоматически через API
 log "Создаю VLESS+Reality inbound автоматически..."
 
 PANEL_BASE_URL="https://127.0.0.1:${PANEL_PORT}${WEB_BASE}"
@@ -676,7 +689,7 @@ else
     FP="chrome"
 fi
 
-# 11. Итог
+# 10. Итог
 ARCH=$(uname -m)
 case "$ARCH" in
     x86_64)  PLATFORM="amd64" ;;
