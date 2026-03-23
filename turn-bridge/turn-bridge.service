@@ -1,0 +1,20 @@
+[Unit]
+Description=TURN Bridge - UDP relay for VK TURN tunnel
+After=network.target x-ui.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/turn-bridge -mode tcp -listen :19302 -target 127.0.0.1:443
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
