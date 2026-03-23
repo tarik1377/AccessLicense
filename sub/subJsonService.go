@@ -225,9 +225,9 @@ func (s *SubJsonService) streamData(stream string) map[string]any {
 	// Route through fragment outbound for DPI bypass, but NOT for Reality —
 	// fragmenting the ClientHello is an anomaly for Reality (real browsers send it in one packet).
 	if security == "reality" {
-		streamSettings["sockopt"] = json_util.RawMessage(`{"tcpKeepAliveIdle": 120}`)
+		streamSettings["sockopt"] = json_util.RawMessage(`{"tcpKeepAliveIdle": 30}`)
 	} else {
-		streamSettings["sockopt"] = json_util.RawMessage(`{"dialerProxy": "fragment", "tcpKeepAliveIdle": 120}`)
+		streamSettings["sockopt"] = json_util.RawMessage(`{"dialerProxy": "fragment", "tcpKeepAliveIdle": 30}`)
 	}
 
 	// remove proxy protocol
@@ -349,22 +349,35 @@ func (s *SubJsonService) genVless(inbound *model.Inbound, streamSettings json_ut
 		outbound.Mux = s.muxConfig()
 	}
 	outbound.StreamSettings = streamSettings
-	settings := make(map[string]any)
-	settings["address"] = inbound.Listen
-	settings["port"] = inbound.Port
-	settings["id"] = client.ID
+
+	// Build user object
+	user := map[string]any{
+		"id":         client.ID,
+		"encryption": "none",
+	}
 	if client.Flow != "" {
-		settings["flow"] = client.Flow
+		user["flow"] = client.Flow
 	}
 
 	// Add encryption for VLESS outbound from inbound settings
 	var inboundSettings map[string]any
 	json.Unmarshal([]byte(inbound.Settings), &inboundSettings)
 	if encryption, ok := inboundSettings["encryption"].(string); ok {
-		settings["encryption"] = encryption
+		user["encryption"] = encryption
 	}
 
-	outbound.Settings = settings
+	// VLESS requires vnext format (same as VMess)
+	vnextData := []map[string]any{
+		{
+			"address": inbound.Listen,
+			"port":    inbound.Port,
+			"users":   []map[string]any{user},
+		},
+	}
+
+	outbound.Settings = map[string]any{
+		"vnext": vnextData,
+	}
 	result, _ := json.Marshal(outbound)
 	return result
 }

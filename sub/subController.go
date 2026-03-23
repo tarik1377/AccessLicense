@@ -287,8 +287,7 @@ func (a *SUBController) ApplyCommonHeaders(
 	c.Writer.Header().Set("Cache-Control", "no-store, no-cache, private")
 	c.Writer.Header().Set("Pragma", "no-cache")
 
-	// CORS headers — restrict to same-origin; client apps (v2rayNG, Hiddify etc.) don't use browser CORS
-	c.Writer.Header().Set("Access-Control-Allow-Origin", c.Request.Header.Get("Origin"))
+	// CORS headers for client apps that fetch via HTTP
+	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 	c.Writer.Header().Set("Access-Control-Expose-Headers", "Subscription-Userinfo, Profile-Update-Interval, Profile-Title, Support-Url, Profile-Web-Page-Url, Announce, Routing-Enable, Routing, Content-Disposition")
-	c.Writer.Header().Set("Vary", "Origin")
 }
