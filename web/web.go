@@ -1,4 +1,4 @@
-// Package web provides the main web server implementation for the 3x-ui panel,
+// Package web provides the main web server implementation for the panel,
 // including HTTP/HTTPS serving, routing, templates, and background job scheduling.
 package web
 
@@ -91,7 +91,7 @@ func EmbeddedAssets() embed.FS {
 	return assetsFS
 }
 
-// Server represents the main web server for the 3x-ui panel with controllers, services, and scheduled jobs.
+// Server represents the main web server for the panel with controllers, services, and scheduled jobs.
 type Server struct {
 	httpServer *http.Server
 	listener   net.Listener
