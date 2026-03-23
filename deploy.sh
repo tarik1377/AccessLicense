@@ -36,8 +36,30 @@ done
 # Приоритет: аргумент (--flag) > ENV переменная > дефолт
 PANEL_PORT=${CUSTOM_PANEL_PORT:-${PANEL_PORT_ENV:-9443}}
 SUB_PORT=${CUSTOM_SUB_PORT:-${SUB_PORT_ENV:-9444}}
-PANEL_USER=${CUSTOM_USER:-${PANEL_USER_ENV:-"admin"}}
-PANEL_PASS=${CUSTOM_PASS:-${PANEL_PASS_ENV:-$(openssl rand -base64 16)}}
+
+# --- Креды: пароль зашифрован AES-256 (ключ = sha256 от логина) ---
+# Чтобы plaintext-пароль НЕ лежал в git
+_DEFAULT_USER="e.allahverdiev"
+# Зашифровано: openssl enc -aes-256-cbc -pbkdf2 -iter 100000 -pass pass:<sha256(username)>
+_DEFAULT_PASS_ENC="U2FsdGVkX1/8KSNvze8T7bi38das486mFMiO6Ufm4IA="
+
+_decrypt_pass() {
+    local key
+    key=$(echo -n "$_DEFAULT_USER" | sha256sum | cut -d' ' -f1)
+    echo "$_DEFAULT_PASS_ENC" | openssl enc -aes-256-cbc -pbkdf2 -iter 100000 \
+        -d -pass "pass:${key}" -base64 -A 2>/dev/null
+}
+
+PANEL_USER=${CUSTOM_USER:-${PANEL_USER_ENV:-"${_DEFAULT_USER}"}}
+if [ -n "${CUSTOM_PASS:-}" ]; then
+    PANEL_PASS="$CUSTOM_PASS"
+elif [ -n "${PANEL_PASS_ENV:-}" ]; then
+    PANEL_PASS="$PANEL_PASS_ENV"
+else
+    PANEL_PASS="$(_decrypt_pass)" || PANEL_PASS=""
+    [ -z "$PANEL_PASS" ] && err "Не удалось расшифровать пароль. Передай через --pass или PANEL_PASS_ENV"
+fi
+
 PANEL_PATH="/secretpanel/"
 SUB_PATH="/feed/"
 SUB_JSON_PATH="/config/"
