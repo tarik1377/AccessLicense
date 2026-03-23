@@ -134,13 +134,13 @@ INSERT OR REPLACE INTO settings (id, key, value) VALUES
 INSERT OR REPLACE INTO settings (id, key, value) VALUES
   ((SELECT id FROM settings WHERE key='ipLimitEnable'), 'ipLimitEnable', 'true');
 
--- Xray шаблон: оптимизирован для VLESS+Reality
+-- Xray шаблон: оптимизирован для VLESS+Reality + обход белых списков
 INSERT OR REPLACE INTO settings (id, key, value) VALUES
   ((SELECT id FROM settings WHERE key='xrayTemplateConfig'), 'xrayTemplateConfig', '{
   "log": {"loglevel":"warning","access":"/var/log/x-ui/access.log","error":"/var/log/x-ui/error.log"},
   "api": {"services":["HandlerService","LoggerService","StatsService"],"tag":"api"},
   "stats": {},
-  "policy": {"levels":{"0":{"handshake":2,"connIdle":120,"uplinkOnly":1,"downlinkOnly":1,"statsUserUplink":true,"statsUserDownlink":true,"bufferSize":4}},"system":{"statsInboundUplink":true,"statsInboundDownlink":true,"statsOutboundUplink":true,"statsOutboundDownlink":true}},
+  "policy": {"levels":{"0":{"handshake":4,"connIdle":300,"uplinkOnly":1,"downlinkOnly":1,"statsUserUplink":true,"statsUserDownlink":true,"bufferSize":0}},"system":{"statsInboundUplink":true,"statsInboundDownlink":true,"statsOutboundUplink":true,"statsOutboundDownlink":true}},
   "inbounds": [{"listen":"127.0.0.1","port":62789,"protocol":"dokodemo-door","settings":{"address":"127.0.0.1"},"tag":"api","sniffing":null}],
   "outbounds": [{"protocol":"freedom","settings":{"domainStrategy":"AsIs"},"tag":"direct"},{"protocol":"blackhole","settings":{},"tag":"blocked"}],
   "routing": {"domainStrategy":"AsIs","rules":[{"inboundTag":["api"],"outboundTag":"api","type":"field"},{"ip":["geoip:private"],"outboundTag":"blocked","type":"field"},{"domain":["geosite:category-ads-all"],"outboundTag":"blocked","type":"field"}]}
@@ -606,13 +606,22 @@ print(obj['uuid'] if isinstance(obj,dict) else obj)
     SUB_ID=$(openssl rand -hex 8)
 
     VLESS_PORT=443
-    DEST="yandex.ru:443"
-    SNI="yandex.ru"
+    # SNI — домены из глобальных белых списков, которые НИКОГДА не блокируют
+    DEST="www.microsoft.com:443"
+    SNI="www.microsoft.com"
     FP="chrome"
+    # Дополнительные SNI для fallback (все из белых списков любого ISP)
+    SNI_LIST="www.microsoft.com,www.google.com,dl.google.com,www.apple.com,gateway.icloud.com,cdn.mozilla.net"
+
+    # Генерируем несколько shortIds для ротации
+    SHORT_ID2=$(openssl rand -hex 4)
+    SHORT_ID3=$(openssl rand -hex 2)
+    SHORT_ID4=$(openssl rand -hex 8)
 
     # Создаём inbound
     INBOUND_JSON=$(python3 -c "
 import json
+sni_list = '${SNI_LIST}'.split(',')
 ib = {
     'up':0,'down':0,'total':0,
     'remark':'VLESS-Reality-${SNI}','enable':True,'expiryTime':0,'listen':'',
@@ -626,9 +635,9 @@ ib = {
     'streamSettings':json.dumps({
         'network':'tcp','security':'reality','externalProxy':[],
         'realitySettings':{'show':False,'xver':0,'dest':'${DEST}',
-            'serverNames':['${SNI}'],'privateKey':'${PRIV_KEY}',
+            'serverNames':sni_list,'privateKey':'${PRIV_KEY}',
             'minClient':'','maxClient':'','maxTimediff':0,
-            'shortIds':['${SHORT_ID}','','0123456789abcdef'],
+            'shortIds':['${SHORT_ID}','${SHORT_ID2}','${SHORT_ID3}','${SHORT_ID4}',''],
             'settings':{'publicKey':'${PUB_KEY}','fingerprint':'${FP}','serverName':''}},
         'tcpSettings':{'acceptProxyProtocol':False,'header':{'type':'none'}}
     }),
@@ -654,7 +663,7 @@ else
     SHORT_ID="(не сгенерирован)"
     SUB_ID="(не сгенерирован)"
     VLESS_PORT=443
-    SNI="yandex.ru"
+    SNI="www.microsoft.com"
     FP="chrome"
 fi
 
@@ -677,6 +686,9 @@ else
     PANEL_PROTO="https"
 fi
 
+# Генерируем VLESS ссылку (совместима с V2RayTun, v2rayNG, Hiddify, Streisand)
+VLESS_LINK="vless://${CLIENT_UUID}@${SERVER_IP}:${VLESS_PORT}?type=tcp&security=reality&pbk=${PUB_KEY}&fp=${FP}&sni=${SNI}&sid=${SHORT_ID}&flow=xtls-rprx-vision#AccessLicense-${NODE_NAME}"
+
 echo ""
 log "============================================"
 log "  ВСЁ ГОТОВО! ДАННЫЕ ДЛЯ ПОДКЛЮЧЕНИЯ"
@@ -696,15 +708,32 @@ info "    UUID:        ${CLIENT_UUID}"
 info "    Public Key:  ${PUB_KEY}"
 info "    Short ID:    ${SHORT_ID}"
 info "    SNI:         ${SNI}"
+info "    ServerNames: www.microsoft.com, www.google.com, dl.google.com, www.apple.com"
 info "    Fingerprint: ${FP}"
 info "    Flow:        xtls-rprx-vision"
 info "    Лимит:       3 устройства"
+echo ""
+log "  VLESS ссылка (скопируй в V2RayTun / v2rayNG / Hiddify):"
+echo -e "  ${CYAN}${VLESS_LINK}${NC}"
 echo ""
 log "  Подписки:"
 info "    ${PANEL_PROTO}://${DISPLAY_HOST}:${SUB_PORT}${SUB_PATH}${SUB_ID}"
 info "    ${PANEL_PROTO}://${DISPLAY_HOST}:${SUB_PORT}${SUB_JSON_PATH}${SUB_ID}"
 echo ""
-log "  Nginx:     порт 80 → сайт-прикрытие (CloudVantage)"
+log "═══════════════════════════════════════════════════════════"
+log "  ОБХОД БЕЛЫХ СПИСКОВ — НАСТРОЙКА В КЛИЕНТЕ V2RayTun:"
+log "═══════════════════════════════════════════════════════════"
+info "  1. Добавь профиль по ссылке выше"
+info "  2. В настройках профиля включи Fragment:"
+info "       packets: tlshello"
+info "       length:  10-30"
+info "       interval: 10-20"
+info "  3. Если не подключается — смени SNI на один из:"
+info "       www.google.com / dl.google.com / www.apple.com"
+info "  4. Включи MUX (Multiplex) если доступно"
+info "  5. Попробуй DNS: https://1.1.1.1/dns-query"
+log "═══════════════════════════════════════════════════════════"
 echo ""
+log "  Nginx:     порт 80 → сайт-прикрытие (CloudVantage)"
 log "  Мониторинг:  x-ui          (меню управления)"
 log "============================================"

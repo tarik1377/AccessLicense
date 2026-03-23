@@ -9,6 +9,10 @@
         "skipFallback": false
       },
       {
+        "address": "https://8.8.8.8/dns-query",
+        "skipFallback": false
+      },
+      {
         "address": "localhost",
         "skipFallback": true,
         "domains": [
@@ -58,14 +62,19 @@
         "domainStrategy": "AsIs",
         "fragment": {
           "packets": "tlshello",
-          "length": "100-200",
-          "interval": "5-10"
+          "length": "10-30",
+          "interval": "10-20"
         },
         "noises": [
           {
             "type": "rand",
-            "packet": "50-100",
-            "delay": "30-80"
+            "packet": "10-20",
+            "delay": "10-16"
+          },
+          {
+            "type": "str",
+            "packet": "GET / HTTP/1.1\r\nHost: www.google.com\r\nAccept: */*\r\n\r\n",
+            "delay": "1-5"
           }
         ]
       }
