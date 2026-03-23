@@ -1,9 +1,9 @@
 services:
-  3xui:
+  panel:
     build:
       context: .
       dockerfile: ./Dockerfile
-    container_name: 3xui_app
+    container_name: panel_app
     # hostname: yourhostname <- optional
     volumes:
       - $PWD/db/:/etc/x-ui/

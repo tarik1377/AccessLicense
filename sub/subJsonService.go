@@ -225,9 +225,9 @@ func (s *SubJsonService) streamData(stream string) map[string]any {
 	// Route through fragment outbound for DPI bypass, but NOT for Reality —
 	// fragmenting the ClientHello is an anomaly for Reality (real browsers send it in one packet).
 	if security == "reality" {
-		streamSettings["sockopt"] = json_util.RawMessage(`{"tcpKeepAliveIdle": 45}`)
+		streamSettings["sockopt"] = json_util.RawMessage(`{"tcpKeepAliveIdle": 120}`)
 	} else {
-		streamSettings["sockopt"] = json_util.RawMessage(`{"dialerProxy": "fragment", "tcpKeepAliveIdle": 45}`)
+		streamSettings["sockopt"] = json_util.RawMessage(`{"dialerProxy": "fragment", "tcpKeepAliveIdle": 120}`)
 	}
 
 	// remove proxy protocol
@@ -315,7 +315,6 @@ func (s *SubJsonService) genVnext(inbound *model.Inbound, streamSettings json_ut
 	usersData := make([]UserVnext, 1)
 
 	usersData[0].ID = client.ID
-	usersData[0].Email = client.Email
 	usersData[0].Security = client.Security
 	vnextData := make([]VnextSetting, 1)
 	vnextData[0] = VnextSetting{
@@ -340,7 +339,15 @@ func (s *SubJsonService) genVless(inbound *model.Inbound, streamSettings json_ut
 	outbound := Outbound{}
 	outbound.Protocol = string(inbound.Protocol)
 	outbound.Tag = "proxy"
-	outbound.Mux = s.muxConfig()
+	// For Reality: XTLS-Vision flow uses concurrency=-1 (XUDP only, no TCP mux).
+	// Reality without flow also uses concurrency=-1 to avoid MUX traffic patterns
+	// that DPI can detect as anomalous for a "normal" TLS connection.
+	isReality := strings.Contains(inbound.StreamSettings, `"reality"`)
+	if client.Flow != "" || isReality {
+		outbound.Mux = json_util.RawMessage(`{"enabled": true, "concurrency": -1, "xudpConcurrency": 16, "xudpProxyUDP443": "allow"}`)
+	} else {
+		outbound.Mux = s.muxConfig()
+	}
 	outbound.StreamSettings = streamSettings
 	settings := make(map[string]any)
 	settings["address"] = inbound.Listen
@@ -423,7 +430,6 @@ type VnextSetting struct {
 
 type UserVnext struct {
 	ID       string `json:"id"`
-	Email    string `json:"email,omitempty"`
 	Security string `json:"security,omitempty"`
 }
 

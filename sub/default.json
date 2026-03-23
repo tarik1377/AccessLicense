@@ -9,6 +9,14 @@
         "skipFallback": false
       },
       {
+        "address": "https://8.8.8.8/dns-query",
+        "skipFallback": false
+      },
+      {
+        "address": "https://common.dot.dns.yandex.net/dns-query",
+        "skipFallback": false
+      },
+      {
         "address": "localhost",
         "skipFallback": true,
         "domains": [
@@ -58,14 +66,19 @@
         "domainStrategy": "AsIs",
         "fragment": {
           "packets": "tlshello",
-          "length": "100-200",
-          "interval": "5-10"
+          "length": "40-100",
+          "interval": "30-80"
         },
         "noises": [
           {
             "type": "rand",
-            "packet": "50-100",
-            "delay": "30-80"
+            "packet": "200-400",
+            "delay": "50-150"
+          },
+          {
+            "type": "str",
+            "packet": "GET /complete/search?q=weather&cp=7&client=gws-wiz&xssi=t HTTP/2\r\nHost: www.google.com\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36\r\nAccept: */*\r\nAccept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7\r\nSec-Fetch-Dest: empty\r\nSec-Fetch-Mode: cors\r\nSec-Fetch-Site: same-origin\r\n\r\n",
+            "delay": "50-200"
           }
         ]
       }
@@ -104,7 +117,7 @@
     }
   },
   "routing": {
-    "domainStrategy": "AsIs",
+    "domainStrategy": "IPIfNonMatch",
     "rules": [
       {
         "type": "field",
@@ -140,7 +153,23 @@
           "domain:premier.one",
           "domain:more.tv",
           "domain:start.ru",
-          "domain:rkn.gov.ru"
+          "domain:rkn.gov.ru",
+          "domain:gosuslugi.ru",
+          "domain:mos.ru",
+          "domain:nalog.gov.ru",
+          "domain:tinkoff.ru",
+          "domain:alfabank.ru",
+          "domain:vtb.ru",
+          "domain:megafon.ru",
+          "domain:mts.ru",
+          "domain:beeline.ru",
+          "domain:rostelecom.ru",
+          "domain:rt.ru",
+          "domain:wildberries.ru",
+          "domain:ozon.ru",
+          "domain:avito.ru",
+          "domain:kinopoisk.ru",
+          "domain:ivi.ru"
         ]
       },
       {
@@ -150,6 +179,11 @@
           "geoip:ru",
           "geoip:private"
         ]
+      },
+      {
+        "type": "field",
+        "port": "53",
+        "outboundTag": "proxy"
       },
       {
         "type": "field",

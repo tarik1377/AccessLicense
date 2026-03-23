@@ -142,7 +142,7 @@ optimize_sysctl() {
     # Load BBR module first
     load_bbr_module
 
-    local sysctl_conf="/etc/sysctl.d/99-x-ui-optimizations.conf"
+    local sysctl_conf="/etc/sysctl.d/99-net-optimizations.conf"
 
     cat > "${sysctl_conf}" << 'SYSCTL_EOF'
 # x-ui VPN performance optimizations

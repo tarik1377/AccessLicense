@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"runtime"
@@ -45,27 +44,27 @@ func GetGeoipPath() string {
 
 // GetIPLimitLogPath returns the path to the IP limit log file.
 func GetIPLimitLogPath() string {
-	return config.GetLogFolder() + "/3xipl.log"
+	return config.GetLogFolder() + "/ipl.log"
 }
 
 // GetIPLimitBannedLogPath returns the path to the banned IP log file.
 func GetIPLimitBannedLogPath() string {
-	return config.GetLogFolder() + "/3xipl-banned.log"
+	return config.GetLogFolder() + "/ipl-banned.log"
 }
 
 // GetIPLimitBannedPrevLogPath returns the path to the previous banned IP log file.
 func GetIPLimitBannedPrevLogPath() string {
-	return config.GetLogFolder() + "/3xipl-banned.prev.log"
+	return config.GetLogFolder() + "/ipl-banned.prev.log"
 }
 
 // GetAccessPersistentLogPath returns the path to the persistent access log file.
 func GetAccessPersistentLogPath() string {
-	return config.GetLogFolder() + "/3xipl-ap.log"
+	return config.GetLogFolder() + "/ipl-ap.log"
 }
 
 // GetAccessPersistentPrevLogPath returns the path to the previous persistent access log file.
 func GetAccessPersistentPrevLogPath() string {
-	return config.GetLogFolder() + "/3xipl-ap.prev.log"
+	return config.GetLogFolder() + "/ipl-ap.prev.log"
 }
 
 // GetAccessLogPath reads the Xray config and returns the access log file path.
@@ -258,7 +257,7 @@ func (p *process) Start() (err error) {
 	if p.configPath != "" {
 		configPath = p.configPath
 	}
-	err = os.WriteFile(configPath, data, fs.ModePerm)
+	err = os.WriteFile(configPath, data, 0600)
 	if err != nil {
 		return common.NewErrorf("Failed to write configuration file: %v", err)
 	}

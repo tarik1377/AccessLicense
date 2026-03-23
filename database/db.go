@@ -1,16 +1,18 @@
 // Package database provides database initialization, migration, and management utilities
-// for the 3x-ui panel using GORM with SQLite.
+// for the panel using GORM with SQLite.
 package database
 
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
 	"os"
 	"path"
 	"slices"
+	"time"
 
 	"github.com/tarik1377/AccessLicense/v2/config"
 	"github.com/tarik1377/AccessLicense/v2/database/model"
@@ -139,10 +141,22 @@ func InitDB(dbPath string) error {
 	c := &gorm.Config{
 		Logger: gormLogger,
 	}
-	db, err = gorm.Open(sqlite.Open(dbPath), c)
+	// Enable WAL mode and set busy timeout to prevent "database is locked" errors
+	// during concurrent access from traffic update jobs and API handlers.
+	dsn := fmt.Sprintf("%s?_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL&cache=shared", dbPath)
+	db, err = gorm.Open(sqlite.Open(dsn), c)
 	if err != nil {
 		return err
 	}
+
+	// Configure connection pool for SQLite concurrent access.
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
+	sqlDB.SetConnMaxLifetime(time.Hour)
 
 	if err := initModels(); err != nil {
 		return err

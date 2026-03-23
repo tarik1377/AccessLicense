@@ -746,7 +746,7 @@ func (s *ServerService) GetLogs(count string, level string, syslog string) []str
 		cmd.Stdout = &out
 		err = cmd.Run()
 		if err != nil {
-			return []string{"Failed to run journalctl command! Make sure systemd is available and x-ui service is registered."}
+			return []string{"Failed to run journalctl command! Make sure systemd is available and the service is registered."}
 		}
 		lines = strings.Split(out.String(), "\n")
 	} else {

@@ -1,4 +1,4 @@
-// Package session provides session management utilities for the 3x-ui web panel.
+// Package session provides session management utilities for the web panel.
 // It handles user authentication state, login sessions, and session storage using Gin sessions.
 package session
 
@@ -36,12 +36,11 @@ func SetLoginUser(c *gin.Context, user *model.User) {
 // This controls how long the session remains valid before requiring re-authentication.
 func SetMaxAge(c *gin.Context, maxAge int) {
 	s := sessions.Default(c)
-	// TODO: Set Secure: true when the panel is served over HTTPS (certFile/keyFile configured).
-	// Currently left as false to avoid breaking HTTP-only deployments, since session.go
-	// does not have access to the TLS configuration at this layer.
+	// Detect HTTPS from request: direct TLS or reverse proxy (X-Forwarded-Proto)
+	isSecure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
 	s.Options(sessions.Options{
 		Path:     defaultPath,
-		Secure:   false,
+		Secure:   isSecure,
 		MaxAge:   maxAge,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,

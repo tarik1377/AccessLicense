@@ -8,8 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tarik1377/AccessLicense/v2/config"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -149,7 +147,7 @@ func (a *SUBController) subs(c *gin.Context) {
 			page := a.subService.BuildPageData(subId, hostHeader, traffic, lastOnline, subs, subURL, subJsonURL, basePathStr)
 			c.HTML(200, "subpage.html", gin.H{
 				"title":        "subscription.title",
-				"cur_ver":      config.GetVersion(),
+				"cur_ver":      "",
 				"host":         page.Host,
 				"base_path":    page.BasePath,
 				"sId":          page.SId,
@@ -235,6 +233,8 @@ func (a *SUBController) subJsons(c *gin.Context) {
 		}
 		a.ApplyCommonHeaders(c, header, a.updateInterval, a.subTitle, a.subSupportUrl, profileUrl, a.subAnnounce, a.subEnableRouting, a.subRoutingRules)
 
+		// Override Content-Type for JSON subscriptions so clients parse correctly
+		c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 		c.String(200, jsonSub)
 	}
 }
@@ -283,7 +283,12 @@ func (a *SUBController) ApplyCommonHeaders(
 		c.Writer.Header().Set("Routing", profileRoutingRules)
 	}
 
-	// CORS headers for client apps that fetch via HTTP
-	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+	// Prevent ISP/CDN/proxy caching of subscription data
+	c.Writer.Header().Set("Cache-Control", "no-store, no-cache, private")
+	c.Writer.Header().Set("Pragma", "no-cache")
+
+	// CORS headers — restrict to same-origin; client apps (v2rayNG, Hiddify etc.) don't use browser CORS
+	c.Writer.Header().Set("Access-Control-Allow-Origin", c.Request.Header.Get("Origin"))
 	c.Writer.Header().Set("Access-Control-Expose-Headers", "Subscription-Userinfo, Profile-Update-Interval, Profile-Title, Support-Url, Profile-Web-Page-Url, Announce, Routing-Enable, Routing, Content-Disposition")
+	c.Writer.Header().Set("Vary", "Origin")
 }

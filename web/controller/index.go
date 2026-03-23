@@ -85,11 +85,11 @@ func (a *IndexController) login(c *gin.Context) {
 	now := time.Now()
 	if val, ok := loginAttempts.Load(ip); ok {
 		attempt := val.(*loginAttempt)
-		if now.Sub(attempt.lastTime) > 5*time.Minute {
+		if now.Sub(attempt.lastTime) > 10*time.Minute {
 			attempt.count = 0
 			attempt.lastTime = now
 		}
-		if attempt.count > 5 {
+		if attempt.count > 3 {
 			logger.Warningf("Too many login attempts from IP: %s", ip)
 			c.JSON(http.StatusTooManyRequests, gin.H{"success": false, "msg": "Too many login attempts, try again later"})
 			return
