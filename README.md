@@ -46,7 +46,3 @@ For full documentation, please visit the [project Wiki](https://github.com/tarik
 <a href="https://github.com/tarik1377/AccessLicense" target="_blank">
 <img src="./media/default-yellow.png" alt="Buy Me A Coffee" style="height: 70px !important;width: 277px !important;" >
 </a>
-
-## Stargazers over Time
-
-[![Stargazers over time](https://starchart.cc/tarik1377/AccessLicense.svg?variant=adaptive)](https://starchart.cc/tarik1377/AccessLicense)
