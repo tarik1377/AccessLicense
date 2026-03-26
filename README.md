@@ -47,11 +47,6 @@ For full documentation, please visit the [project Wiki](https://github.com/tarik
 <img src="./media/default-yellow.png" alt="Buy Me A Coffee" style="height: 70px !important;width: 277px !important;" >
 </a>
 
-</br>
-<a href="https://nowpayments.io/donation/hsanaei" target="_blank" rel="noreferrer noopener">
-   <img src="./media/donation-button-black.svg" alt="Crypto donation button by NOWPayments">
-</a>
-
 ## Stargazers over Time
 
 [![Stargazers over time](https://starchart.cc/tarik1377/AccessLicense.svg?variant=adaptive)](https://starchart.cc/tarik1377/AccessLicense)
