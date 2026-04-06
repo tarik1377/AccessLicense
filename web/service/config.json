@@ -92,13 +92,7 @@
         "type": "field",
         "outboundTag": "blocked",
         "domain": [
-          "geosite:category-ads-all"
-        ]
-      },
-      {
-        "type": "field",
-        "outboundTag": "blocked",
-        "domain": [
+          "geosite:category-ads-all",
           "geosite:win-spy",
           "geosite:win-extra"
         ]
@@ -115,6 +109,13 @@
         "outboundTag": "direct",
         "domain": [
           "geosite:category-ru"
+        ]
+      },
+      {
+        "type": "field",
+        "outboundTag": "direct",
+        "ip": [
+          "geoip:ru"
         ]
       },
       {
