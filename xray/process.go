@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
@@ -220,12 +221,21 @@ func (p *process) refreshVersion() {
 	data, err := cmd.Output()
 	if err != nil {
 		p.version = "Unknown"
+		return
+	}
+
+	// Use regex to reliably extract version number (e.g., "Xray 1.8.4" or "Xray 25.1.1")
+	re := regexp.MustCompile(`(?i)xray\s+(\d+\.\d+\.\d+)`)
+	matches := re.FindSubmatch(data)
+	if len(matches) >= 2 {
+		p.version = string(matches[1])
 	} else {
-		datas := bytes.Split(data, []byte(" "))
-		if len(datas) <= 1 {
-			p.version = "Unknown"
+		// Fallback: try splitting by space (legacy format)
+		parts := bytes.Fields(data)
+		if len(parts) >= 2 {
+			p.version = string(parts[1])
 		} else {
-			p.version = string(datas[1])
+			p.version = "Unknown"
 		}
 	}
 }

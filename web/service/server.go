@@ -628,6 +628,10 @@ func (s *ServerService) downloadXRay(version string) (string, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to download Xray version %s: HTTP %d", version, resp.StatusCode)
+	}
+
 	os.Remove(fileName)
 	file, err := os.Create(fileName)
 	if err != nil {
@@ -644,18 +648,14 @@ func (s *ServerService) downloadXRay(version string) (string, error) {
 }
 
 func (s *ServerService) UpdateXray(version string) error {
-	// 1. Stop xray before doing anything
-	if err := s.StopXrayService(); err != nil {
-		logger.Warning("failed to stop xray before update:", err)
-	}
-
-	// 2. Download the zip
+	// 1. Download the zip BEFORE stopping Xray (so VPN stays up if download fails)
 	zipFileName, err := s.downloadXRay(version)
 	if err != nil {
 		return err
 	}
 	defer os.Remove(zipFileName)
 
+	// 2. Open and validate the zip file
 	zipFile, err := os.Open(zipFileName)
 	if err != nil {
 		return err
@@ -668,16 +668,34 @@ func (s *ServerService) UpdateXray(version string) error {
 	}
 	reader, err := zip.NewReader(zipFile, stat.Size())
 	if err != nil {
-		return err
+		return fmt.Errorf("downloaded file is not a valid zip archive: %v", err)
+	}
+
+	// Determine the expected binary name inside the zip
+	zipBinaryName := "xray"
+	if runtime.GOOS == "windows" {
+		zipBinaryName = "xray.exe"
+	}
+
+	// Validate that the zip contains the xray binary
+	found := false
+	for _, f := range reader.File {
+		if f.Name == zipBinaryName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("zip archive does not contain '%s' binary", zipBinaryName)
 	}
 
 	// 3. Helper to extract files
 	copyZipFile := func(zipName string, fileName string) error {
-		zipFile, err := reader.Open(zipName)
+		zf, err := reader.Open(zipName)
 		if err != nil {
 			return err
 		}
-		defer zipFile.Close()
+		defer zf.Close()
 		os.MkdirAll(filepath.Dir(fileName), 0755)
 		os.Remove(fileName)
 		file, err := os.OpenFile(fileName, os.O_CREATE|os.O_RDWR|os.O_TRUNC, fs.ModePerm)
@@ -685,22 +703,68 @@ func (s *ServerService) UpdateXray(version string) error {
 			return err
 		}
 		defer file.Close()
-		_, err = io.Copy(file, zipFile)
+		_, err = io.Copy(file, zf)
 		return err
 	}
 
-	// 4. Extract correct binary
+	// 4. Determine target binary path
+	var targetBinary string
 	if runtime.GOOS == "windows" {
-		targetBinary := filepath.Join("bin", "xray-windows-amd64.exe")
-		err = copyZipFile("xray.exe", targetBinary)
+		targetBinary = filepath.Join("bin", "xray-windows-amd64.exe")
 	} else {
-		err = copyZipFile("xray", xray.GetBinaryPath())
+		targetBinary = xray.GetBinaryPath()
 	}
-	if err != nil {
-		return err
+	backupBinary := targetBinary + ".bak"
+
+	// 5. Now stop Xray (download succeeded, zip is valid)
+	if err := s.StopXrayService(); err != nil {
+		logger.Warning("failed to stop xray before update:", err)
 	}
 
-	// 5. Restart xray
+	// 6. Backup existing binary for rollback
+	hasBackup := false
+	if _, err := os.Stat(targetBinary); err == nil {
+		if err := os.Rename(targetBinary, backupBinary); err != nil {
+			logger.Warning("failed to backup xray binary:", err)
+		} else {
+			hasBackup = true
+		}
+	}
+
+	// rollback helper: restore backup and restart on failure
+	rollback := func() {
+		if hasBackup {
+			if err := os.Rename(backupBinary, targetBinary); err != nil {
+				logger.Error("failed to restore xray binary from backup:", err)
+			} else {
+				logger.Info("restored xray binary from backup")
+			}
+		}
+		if err := s.xrayService.RestartXray(true); err != nil {
+			logger.Error("failed to restart xray after rollback:", err)
+		}
+	}
+
+	// 7. Extract new binary
+	if err := copyZipFile(zipBinaryName, targetBinary); err != nil {
+		rollback()
+		return fmt.Errorf("failed to extract xray binary: %v", err)
+	}
+
+	// 8. Make binary executable
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(targetBinary, 0755); err != nil {
+			rollback()
+			return fmt.Errorf("failed to set xray binary permissions: %v", err)
+		}
+	}
+
+	// 9. Clean up backup
+	if hasBackup {
+		os.Remove(backupBinary)
+	}
+
+	// 10. Restart xray with new binary
 	if err := s.xrayService.RestartXray(true); err != nil {
 		logger.Error("start xray failed:", err)
 		return err

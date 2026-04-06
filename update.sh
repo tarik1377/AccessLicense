@@ -999,9 +999,10 @@ update_x-ui() {
     if [[ $(arch) == "armv5" || $(arch) == "armv6" || $(arch) == "armv7" ]]; then
         mv bin/xray-linux-$(arch) bin/xray-linux-arm >/dev/null 2>&1
         chmod +x bin/xray-linux-arm >/dev/null 2>&1
+        chmod +x x-ui >/dev/null 2>&1
+    else
+        chmod +x x-ui bin/xray-linux-$(arch) >/dev/null 2>&1
     fi
-    
-    chmod +x x-ui bin/xray-linux-$(arch) >/dev/null 2>&1
     
     echo -e "${green}Downloading and installing x-ui.sh script...${plain}"
     ${curl_bin} -fLRo /usr/bin/x-ui https://raw.githubusercontent.com/tarik1377/AccessLicense/main/x-ui.sh >/dev/null 2>&1
