@@ -78,6 +78,9 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		c.Header("X-Frame-Options", "DENY")
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 		c.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		if c.Request.TLS != nil {
+			c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
 		c.Writer.Header().Del("Server")
 		c.Next()
 	})

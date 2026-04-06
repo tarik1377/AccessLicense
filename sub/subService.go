@@ -978,7 +978,7 @@ func getFingerprint(fp string) string {
 		// Chrome dominates in Russia (~70%), Firefox ~8%, Edge ~3%.
 		// Safari excluded — anomalous on Windows/Linux from Russian IPs.
 		// Weighted toward chrome for realistic distribution.
-		fingerprints := []string{"chrome", "chrome", "chrome", "firefox", "edge"}
+		fingerprints := []string{"chrome", "chrome", "chrome", "chrome", "chrome", "chrome", "chrome", "firefox", "edge", "chrome"}
 		return fingerprints[random.Num(len(fingerprints))]
 	}
 	return fp

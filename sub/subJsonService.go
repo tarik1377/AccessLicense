@@ -38,7 +38,8 @@ func NewSubJsonService(fragment string, noises string, mux string, rules string,
 	if outboundSlices, ok := configJson["outbounds"].([]any); ok {
 		for _, defaultOutbound := range outboundSlices {
 			jsonBytes, _ := json.Marshal(defaultOutbound)
-			defaultOutbounds = append(defaultOutbounds, jsonBytes)
+			// Randomize noise host to avoid DPI fingerprinting
+			defaultOutbounds = append(defaultOutbounds, randomizeNoiseHost(jsonBytes))
 		}
 	}
 
@@ -47,7 +48,15 @@ func NewSubJsonService(fragment string, noises string, mux string, rules string,
 		routing, _ := configJson["routing"].(map[string]any)
 		defaultRules, _ := routing["rules"].([]any)
 		json.Unmarshal([]byte(rules), &newRules)
-		defaultRules = append(newRules, defaultRules...)
+		// Insert custom rules BEFORE the catch-all rule (last) but AFTER direct rules,
+		// so that Russian direct routing is preserved and catch-all stays last.
+		if len(defaultRules) > 0 {
+			lastRule := defaultRules[len(defaultRules)-1]
+			defaultRules = append(defaultRules[:len(defaultRules)-1], newRules...)
+			defaultRules = append(defaultRules, lastRule)
+		} else {
+			defaultRules = newRules
+		}
 		routing["rules"] = defaultRules
 		configJson["routing"] = routing
 	}
@@ -225,9 +234,9 @@ func (s *SubJsonService) streamData(stream string) map[string]any {
 	// Route through fragment outbound for DPI bypass, but NOT for Reality —
 	// fragmenting the ClientHello is an anomaly for Reality (real browsers send it in one packet).
 	if security == "reality" {
-		streamSettings["sockopt"] = json_util.RawMessage(`{"tcpKeepAliveIdle": 30}`)
+		streamSettings["sockopt"] = json_util.RawMessage(`{"tcpKeepAliveIdle": 45}`)
 	} else {
-		streamSettings["sockopt"] = json_util.RawMessage(`{"dialerProxy": "fragment", "tcpKeepAliveIdle": 30}`)
+		streamSettings["sockopt"] = json_util.RawMessage(`{"dialerProxy": "fragment", "tcpKeepAliveIdle": 45}`)
 	}
 
 	// remove proxy protocol
@@ -243,6 +252,20 @@ func (s *SubJsonService) streamData(stream string) map[string]any {
 	return streamSettings
 }
 
+// randomizeNoiseHost replaces hardcoded noise Host header with a random popular host
+// to prevent DPI systems from fingerprinting noise packets.
+func randomizeNoiseHost(outbound json_util.RawMessage) json_util.RawMessage {
+	noiseHosts := []string{
+		"www.google.com", "www.microsoft.com", "www.apple.com",
+		"cdn.jsdelivr.net", "ajax.googleapis.com", "fonts.gstatic.com",
+		"www.cloudflare.com", "assets.msn.com", "static.cloudflareinsights.com",
+	}
+	host := noiseHosts[random.Num(len(noiseHosts))]
+	return json_util.RawMessage(
+		strings.ReplaceAll(string(outbound), "www.google.com", host),
+	)
+}
+
 func (s *SubJsonService) removeAcceptProxy(setting any) map[string]any {
 	netSettings, ok := setting.(map[string]any)
 	if ok {
@@ -252,13 +275,16 @@ func (s *SubJsonService) removeAcceptProxy(setting any) map[string]any {
 }
 
 func (s *SubJsonService) tlsData(tData map[string]any) map[string]any {
-	tlsData := make(map[string]any, 1)
+	tlsData := make(map[string]any, 4)
 	tlsClientSettings, _ := tData["settings"].(map[string]any)
 
 	tlsData["serverName"] = tData["serverName"]
 	tlsData["alpn"] = tData["alpn"]
-	if fingerprint, ok := tlsClientSettings["fingerprint"].(string); ok {
-		tlsData["fingerprint"] = fingerprint
+	if fp, ok := tlsClientSettings["fingerprint"].(string); ok {
+		tlsData["fingerprint"] = getFingerprint(fp)
+	}
+	if allowInsecure, ok := tlsClientSettings["allowInsecure"].(bool); ok {
+		tlsData["allowInsecure"] = allowInsecure
 	}
 	return tlsData
 }
